@@ -1,0 +1,7 @@
+# ObraStock — rotas amigáveis no Cloudflare Pages
+# Formato: origem  destino  código
+
+# Permite digitar /login em vez de /login.html
+/login      /login.html     301
+/entrar     /login.html     301
+/sistema    /index.html     301

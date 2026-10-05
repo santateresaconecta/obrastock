@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+<infNFe Id="NFe32250908412556000134550010000195010001950123" versao="4.00">
+<ide><cUF>32</cUF><natOp>VENDA DE MERCADORIA</natOp><mod>55</mod><serie>1</serie><nNF>19501</nNF>
+<dhEmi>2026-09-15T10:32:00-03:00</dhEmi><tpNF>1</tpNF><idDest>1</idDest><cMunFG>3204609</cMunFG></ide>
+<emit><CNPJ>08412556000134</CNPJ><xNome>DEPOSITO CENTRAL MATERIAIS DE CONSTRUCAO LTDA</xNome>
+<xFant>Deposito Central</xFant>
+<enderEmit><xLgr>Rua Principal</xLgr><nro>100</nro><xBairro>Centro</xBairro><cMun>3204609</cMun>
+<xMun>Santa Teresa</xMun><UF>ES</UF><CEP>29650000</CEP><fone>2732591420</fone></enderEmit>
+<IE>082345678</IE><CRT>3</CRT></emit>
+<dest><CNPJ>12345678000190</CNPJ><xNome>CONSTRUTORA SANTA TERESA LTDA</xNome>
+<enderDest><xLgr>Av Obras</xLgr><nro>50</nro><xMun>Santa Teresa</xMun><UF>ES</UF></enderDest><indIEDest>1</indIEDest></dest>
+<det nItem="1"><prod><cProd>CIM-CPII-50</cProd><cEAN>7896001020304</cEAN>
+<xProd>CIMENTO CP-II-E-32 SACO 50KG</xProd><NCM>25232910</NCM><CFOP>5102</CFOP><uCom>SC</uCom>
+<qCom>200.0000</qCom><vUnCom>42.9000000000</vUnCom><vProd>8580.00</vProd>
+<cEANTrib>7896001020304</cEANTrib><uTrib>SC</uTrib><qTrib>200.0000</qTrib><vUnTrib>42.90</vUnTrib><indTot>1</indTot></prod>
+<imposto><ICMS><ICMS00><orig>0</orig><CST>00</CST><vBC>8580.00</vBC><pICMS>12.00</pICMS><vICMS>1029.60</vICMS></ICMS00></ICMS></imposto></det>
+<det nItem="2"><prod><cProd>AG-ACII</cProd><cEAN>SEM GTIN</cEAN>
+<xProd>ARGAMASSA COLANTE AC-II SACO 20KG</xProd><NCM>38245000</NCM><CFOP>5102</CFOP><uCom>SC</uCom>
+<qCom>80.0000</qCom><vUnCom>24.5000000000</vUnCom><vProd>1960.00</vProd><indTot>1</indTot></prod>
+<imposto><ICMS><ICMS00><orig>0</orig><CST>00</CST></ICMS00></ICMS></imposto></det>
+<det nItem="3"><prod><cProd>NOVO-XYZ</cProd><cEAN>7890000999123</cEAN>
+<xProd>TELA MOSQUITEIRA FIBRA DE VIDRO ROLO 30M</xProd><NCM>70199000</NCM><CFOP>5102</CFOP><uCom>RL</uCom>
+<qCom>5.0000</qCom><vUnCom>189.9000000000</vUnCom><vProd>949.50</vProd><indTot>1</indTot></prod>
+<imposto><ICMS><ICMS00><orig>0</orig><CST>00</CST></ICMS00></ICMS></imposto></det>
+<total><ICMSTot><vBC>11489.50</vBC><vICMS>1378.74</vICMS><vProd>11489.50</vProd>
+<vFrete>0.00</vFrete><vDesc>0.00</vDesc><vNF>11489.50</vNF></ICMSTot></total>
+<transp><modFrete>0</modFrete></transp>
+<pag><detPag><tPag>15</tPag><vPag>11489.50</vPag></detPag></pag>
+</infNFe></NFe>
+<protNFe versao="4.00"><infProt><chNFe>32250908412556000134550010000195010001950123</chNFe>
+<nProt>132250000123456</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe>
+</nfeProc>

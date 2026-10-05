@@ -1,0 +1,32 @@
+# ======================================================================
+# ObraStock — o que NÃO vai para o repositório nem para o deploy
+# ======================================================================
+
+# Dependências e caches
+node_modules/
+package-lock.json
+.cache/
+.config/
+.local/
+.npm/
+*.log
+
+# Ambiente de teste (não faz parte do sistema)
+test-*.js
+serve-headers.js
+shots.js
+mock/
+pv/
+
+# Geração da proposta comercial
+pdf.js
+proposta/
+
+# Documentos internos — não publicar junto com o sistema
+*.pdf
+Analise-e-Melhorias-ObraStock.md
+PROMPT-PRODUCAO-ObraStock.md
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

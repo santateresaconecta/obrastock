@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entrar — ObraStock</title>
+<meta name="description" content="Acesso ao sistema de gestão de estoque ObraStock.">
+<meta name="theme-color" content="#0f2742">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<!-- tema aplicado antes da pintura, para não piscar branco no modo escuro -->
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('obrastock:tema') || 'auto';
+    var escuro = t === 'dark' || (t === 'auto' &&
+                 window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
+    if (escuro){
+      var m = document.querySelector('meta[name=theme-color]');
+      if (m) m.setAttribute('content', '#0b1623');
+    }
+  }catch(e){}
+})();
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+:root{
+  --navy:#0f2742; --navy-2:#16375c; --navy-3:#1e4b7a;
+  --blue:#1d6fe0; --blue-dark:#1558b4; --blue-soft:#e8f1fd;
+  --amber:#e08a09; --amber-soft:#fdf2e0;
+  --red:#d63b3b; --red-soft:#fdeaea;
+  --green:#1e9e63; --green-soft:#e6f6ee;
+  --gray-50:#f6f8fb; --gray-100:#eef2f7; --gray-200:#e2e8f0; --gray-300:#cbd5e1;
+  --gray-400:#94a3b8; --gray-500:#64748b; --gray-600:#475569; --gray-700:#334155; --gray-900:#0f172a;
+  --card:#ffffff;
+  --radius:14px; --radius-sm:10px;
+  --shadow:0 2px 6px rgba(15,39,66,.06), 0 8px 24px rgba(15,39,66,.07);
+  --shadow-lg:0 12px 40px rgba(15,39,66,.18);
+}
+:root[data-theme="dark"]{
+  --navy:#0b1623; --navy-2:#132234; --navy-3:#1b3a5c;
+  --blue:#4d94ff; --blue-dark:#2f7ae5; --blue-soft:#12233a;
+  --amber:#f0a93a; --amber-soft:#2e2411;
+  --red:#f26a6a; --red-soft:#2e1717;
+  --green:#3fc088; --green-soft:#10281f;
+  --gray-50:#0f1720; --gray-100:#151e29; --gray-200:#1e2936; --gray-300:#2b3a4a;
+  --gray-400:#64748b; --gray-500:#94a3b8; --gray-600:#b6c2d1; --gray-700:#d3dce6; --gray-900:#f1f5f9;
+  --card:#141d28;
+  --shadow:0 2px 6px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+  background:var(--gray-50); color:var(--gray-900);
+  font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  min-height:100dvh; display:flex; flex-direction:column;
+}
+
+/* ---------- faixa de marca ---------- */
+.hero{
+  background:linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 55%, var(--navy-3) 100%);
+  color:#fff; padding:34px 20px 30px; text-align:center;
+}
+.hero .lg{
+  width:58px;height:58px;border-radius:16px;background:var(--amber);
+  display:grid;place-items:center;color:var(--navy);font-size:26px;margin:0 auto 14px;
+  box-shadow:0 6px 18px rgba(0,0,0,.25);
+}
+.hero h1{font-size:24px;font-weight:800;letter-spacing:-.5px}
+.hero p{font-size:13px;color:#9fb6d1;margin-top:3px;letter-spacing:.3px}
+
+/* ---------- cartão ---------- */
+.wrap{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:22px 16px 40px}
+.card{
+  width:100%;max-width:412px;background:var(--card);border:1px solid var(--gray-200);
+  border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 22px;margin-top:-26px;
+}
+.card h2{font-size:17px;font-weight:700;letter-spacing:-.2px;margin-bottom:3px}
+.card .sub{font-size:13px;color:var(--gray-500);margin-bottom:20px}
+
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;letter-spacing:.2px}
+.input{
+  width:100%;padding:12px 13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);
+  background:var(--card);outline:none;color:var(--gray-900);min-height:46px;font-size:15px;
+  font-family:inherit;transition:.15s;
+}
+.input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,111,224,.15)}
+.input:disabled{background:var(--gray-100);color:var(--gray-400)}
+.senha-wrap{position:relative}
+.senha-wrap .input{padding-right:46px}
+.olho{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:36px;height:36px;border:0;background:transparent;color:var(--gray-500);
+  cursor:pointer;border-radius:8px;font-size:15px;
+}
+.olho:hover{background:var(--gray-100);color:var(--gray-700)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:12px 16px;border-radius:var(--radius-sm);border:1px solid transparent;
+  font-weight:600;font-size:15px;cursor:pointer;transition:.15s;min-height:48px;
+  font-family:inherit;
+}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 2px 8px rgba(29,111,224,.25)}
+.btn-primary:hover:not(:disabled){background:var(--blue-dark)}
+.btn:disabled{opacity:.65;cursor:not-allowed}
+.btn-link{
+  background:none;border:0;color:var(--blue);font-weight:600;font-size:13px;
+  cursor:pointer;padding:8px;width:auto;min-height:auto;font-family:inherit;
+}
+.btn-link:hover{text-decoration:underline}
+
+.linha{display:flex;justify-content:flex-end;margin:-4px 0 16px}
+
+.alerta{
+  display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:var(--radius-sm);
+  font-size:13.5px;margin-bottom:16px;line-height:1.4;
+}
+.alerta i{margin-top:2px;flex-shrink:0}
+.a-red{background:var(--red-soft);color:#a62020;border:1px solid #f5c9c9}
+.a-green{background:var(--green-soft);color:#11633f;border:1px solid #bfe6d3}
+.a-blue{background:var(--blue-soft);color:#12497f;border:1px solid #c5dcfa}
+.a-amber{background:var(--amber-soft);color:#7a4a05;border:1px solid #f6ddb0}
+:root[data-theme="dark"] .a-red{color:#ffb4b4;border-color:#5a2a2a}
+:root[data-theme="dark"] .a-green{color:#8fe3bb;border-color:#1d4a37}
+:root[data-theme="dark"] .a-blue{color:#a8cdff;border-color:#24466e}
+:root[data-theme="dark"] .a-amber{color:#f7cd85;border-color:#54401a}
+.alerta code{
+  display:block;margin-top:6px;font-size:11.5px;opacity:.8;
+  font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all;
+}
+
+.rodape{text-align:center;padding:0 20px 26px;font-size:11.5px;color:var(--gray-400)}
+.rodape b{color:var(--gray-500);font-weight:600}
+
+.tema-btn{
+  position:absolute;top:14px;right:14px;width:38px;height:38px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);color:#fff;
+  cursor:pointer;font-size:15px;
+}
+.tema-btn:hover{background:rgba(255,255,255,.2)}
+.hero{position:relative}
+
+.spin{animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ .spin{animation:none} }
+
+.oculto{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <button class="tema-btn" id="btnTema" type="button" aria-label="Alternar modo escuro" title="Alternar tema">
+    <i class="fa-solid fa-moon" id="icoTema"></i>
+  </button>
+  <div class="lg"><i class="fa-solid fa-helmet-safety"></i></div>
+  <h1>ObraStock</h1>
+  <p>GESTÃO DE ESTOQUE</p>
+</div>
+
+<div class="wrap">
+  <div class="card">
+
+    <!-- aviso de configuração / rede -->
+    <div id="avisoSistema" class="alerta a-amber oculto" role="alert">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <div><b id="avisoTitulo"></b><div id="avisoMsg"></div><code id="avisoDetalhe" class="oculto"></code></div>
+    </div>
+
+    <!-- ============ ENTRAR ============ -->
+    <section id="telaLogin">
+      <h2>Entrar</h2>
+      <div class="sub">Acesse com seu e-mail e senha.</div>
+
+      <div id="msgLogin" class="alerta oculto" role="alert"></div>
+
+      <form id="formLogin" novalidate>
+        <div class="field">
+          <label for="email">E-mail</label>
+          <input class="input" type="email" id="email" name="email"
+                 autocomplete="username" inputmode="email" required
+                 placeholder="seu@email.com.br">
+        </div>
+        <div class="field">
+          <label for="senha">Senha</label>
+          <div class="senha-wrap">
+            <input class="input" type="password" id="senha" name="senha"
+                   autocomplete="current-password" required placeholder="••••••••">
+            <button type="button" class="olho" id="verSenha" aria-label="Mostrar senha">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="linha">
+          <button type="button" class="btn-link" id="irEsqueci">Esqueci minha senha</button>
+        </div>
+        <button type="submit" class="btn btn-primary" id="btnEntrar">
+          <i class="fa-solid fa-right-to-bracket"></i> Entrar
+        </button>
+      </form>
+    </section>
+
+    <!-- ============ RECUPERAR SENHA ============ -->
+    <section id="telaEsqueci" class="oculto">
+      <h2>Recuperar acesso</h2>
+      <div class="sub">Enviaremos um link para você criar uma nova senha.</div>
+
+      <div id="msgEsqueci" class="alerta oculto" role="alert"></div>
+
+      <form id="formEsqueci" novalidate>
+        <div class="field">
+          <label for="emailRec">E-mail cadastrado</label>
+          <input class="input" type="email" id="emailRec" autocomplete="username"
+                 inputmode="email" required placeholder="seu@email.com.br">
+        </div>
+        <button type="submit" class="btn btn-primary" id="btnEnviarRec">
+          <i class="fa-solid fa-paper-plane"></i> Enviar link
+        </button>
+      </form>
+      <div style="text-align:center;margin-top:12px">
+        <button type="button" class="btn-link" id="voltarLogin">
+          <i class="fa-solid fa-arrow-left"></i> Voltar para o login
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ NOVA SENHA (vindo do e-mail) ============ -->
+    <section id="telaNovaSenha" class="oculto">
+      <h2>Criar nova senha</h2>
+      <div class="sub">Escolha uma senha de ao menos 6 caracteres.</div>
+
+      <div id="msgNova" class="alerta oculto" role="alert"></div>
+
+      <form id="formNova" novalidate>
+        <div class="field">
+          <label for="senha1">Nova senha</label>
+          <div class="senha-wrap">
+            <input class="input" type="password" id="senha1" autocomplete="new-password" required>
+            <button type="button" class="olho" data-alvo="senha1" aria-label="Mostrar senha">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="senha2">Repita a nova senha</label>
+          <input class="input" type="password" id="senha2" autocomplete="new-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" id="btnSalvarSenha">
+          <i class="fa-solid fa-check"></i> Salvar nova senha
+        </button>
+      </form>
+    </section>
+
+  </div>
+</div>
+
+<div class="rodape">
+  <b>ObraStock</b> · Gestão de Estoque para Construtoras<br>
+  Acesso restrito. Em caso de dúvida, procure o administrador.
+</div>
+
+<script type="module">
+import { entrar, pedirRedefinicao, definirNovaSenha, sessaoAtual, ROTA_APP } from './assets/js/auth.js';
+import { getClient, erroCliente } from './assets/js/supabase.js';
+import { CONFIGURADO } from './assets/js/config.js';
+
+const $ = s => document.querySelector(s);
+
+/* ---------------- tema ---------------- */
+function aplicaIconeTema(){
+  const escuro = document.documentElement.dataset.theme === 'dark';
+  $('#icoTema').className = escuro ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+}
+aplicaIconeTema();
+$('#btnTema').addEventListener('click', () => {
+  const escuro = document.documentElement.dataset.theme === 'dark';
+  const novo = escuro ? 'light' : 'dark';
+  document.documentElement.dataset.theme = novo;
+  try { localStorage.setItem('obrastock:tema', novo); } catch(e){}
+  const m = document.querySelector('meta[name=theme-color]');
+  if (m) m.setAttribute('content', novo === 'dark' ? '#0b1623' : '#0f2742');
+  aplicaIconeTema();
+});
+
+/* ---------------- utilidades ---------------- */
+function msg(el, tipo, texto){
+  const box = $(el);
+  box.className = 'alerta a-' + tipo;
+  const ico = tipo === 'red' ? 'fa-circle-exclamation'
+            : tipo === 'green' ? 'fa-circle-check' : 'fa-circle-info';
+  box.innerHTML = '<i class="fa-solid ' + ico + '"></i><div>' + texto + '</div>';
+  box.classList.remove('oculto');
+}
+function limpa(el){ $(el).classList.add('oculto'); }
+
+function carregando(btn, ligado, textoOriginal){
+  const b = $(btn);
+  b.disabled = ligado;
+  b.innerHTML = ligado
+    ? '<i class="fa-solid fa-circle-notch spin"></i> Aguarde…'
+    : textoOriginal;
+}
+
+function mostrarTela(qual){
+  ['#telaLogin','#telaEsqueci','#telaNovaSenha'].forEach(t =>
+    $(t).classList.toggle('oculto', t !== qual));
+}
+
+/* mostrar/ocultar senha */
+document.querySelectorAll('.olho').forEach(b => {
+  b.addEventListener('click', () => {
+    const alvo = b.dataset.alvo ? $('#' + b.dataset.alvo) : $('#senha');
+    const ver = alvo.type === 'password';
+    alvo.type = ver ? 'text' : 'password';
+    b.innerHTML = '<i class="fa-solid fa-eye' + (ver ? '-slash' : '') + '"></i>';
+    b.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha');
+  });
+});
+
+/* ---------------- diagnóstico de configuração ---------------- */
+async function checarSistema(){
+  if (!CONFIGURADO){
+    $('#avisoTitulo').textContent = 'Sistema ainda não configurado';
+    $('#avisoMsg').innerHTML =
+      'Abra <b>assets/js/config.js</b> e preencha <b>SUPABASE_URL</b> e <b>SUPABASE_ANON</b> ' +
+      'com os dados do seu projeto (Supabase → Project Settings → API).';
+    $('#avisoSistema').classList.remove('oculto');
+    $('#btnEntrar').disabled = true;
+    $('#email').disabled = true;
+    $('#senha').disabled = true;
+    return false;
+  }
+
+  const sb = await getClient();
+  if (!sb){
+    const e = erroCliente() || {};
+    $('#avisoTitulo').textContent = e.titulo || 'Sistema indisponível';
+    $('#avisoMsg').textContent = e.msg || 'Tente novamente em instantes.';
+    if (e.detalhe){
+      $('#avisoDetalhe').textContent = e.detalhe;
+      $('#avisoDetalhe').classList.remove('oculto');
+    }
+    $('#avisoSistema').classList.remove('oculto');
+    $('#btnEntrar').disabled = true;
+    return false;
+  }
+  return true;
+}
+
+/* ---------------- fluxo de recuperação vindo do e-mail ---------------- */
+async function checarRecuperacao(){
+  const temHash = location.hash.includes('type=recovery') || location.hash.includes('access_token');
+  const temQuery = new URLSearchParams(location.search).has('recuperar');
+  if (!temHash && !temQuery) return false;
+
+  const sb = await getClient();
+  if (!sb) return false;
+
+  // o SDK troca o token do link por uma sessão temporária
+  const { data } = await sb.auth.getSession();
+  if (data?.session){
+    mostrarTela('#telaNovaSenha');
+    history.replaceState(null, '', location.pathname);
+    return true;
+  }
+  return false;
+}
+
+/* ---------------- login ---------------- */
+$('#formLogin').addEventListener('submit', async e => {
+  e.preventDefault();
+  limpa('#msgLogin');
+
+  const email = $('#email').value.trim();
+  const senha = $('#senha').value;
+
+  if (!email || !senha){ msg('#msgLogin','red','Preencha e-mail e senha.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    msg('#msgLogin','red','Informe um e-mail válido.'); return;
+  }
+
+  carregando('#btnEntrar', true);
+  const r = await entrar(email, senha);
+
+  if (!r.ok){
+    carregando('#btnEntrar', false, '<i class="fa-solid fa-right-to-bracket"></i> Entrar');
+    msg('#msgLogin','red', r.msg);
+    $('#senha').value = '';
+    $('#senha').focus();
+    return;
+  }
+
+  msg('#msgLogin','green','Acesso liberado. Abrindo o sistema…');
+  const next = new URLSearchParams(location.search).get('next');
+  location.replace(next && /^[\w.-]+\.html/.test(next) ? next : ROTA_APP);
+});
+
+/* ---------------- recuperar senha ---------------- */
+$('#irEsqueci').addEventListener('click', () => {
+  $('#emailRec').value = $('#email').value.trim();
+  limpa('#msgEsqueci');
+  mostrarTela('#telaEsqueci');
+  $('#emailRec').focus();
+});
+$('#voltarLogin').addEventListener('click', () => { mostrarTela('#telaLogin'); $('#email').focus(); });
+
+$('#formEsqueci').addEventListener('submit', async e => {
+  e.preventDefault();
+  limpa('#msgEsqueci');
+  const email = $('#emailRec').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    msg('#msgEsqueci','red','Informe um e-mail válido.'); return;
+  }
+  carregando('#btnEnviarRec', true);
+  const r = await pedirRedefinicao(email);
+  carregando('#btnEnviarRec', false, '<i class="fa-solid fa-paper-plane"></i> Enviar link');
+  msg('#msgEsqueci', r.ok ? 'green' : 'red', r.msg);
+});
+
+/* ---------------- nova senha ---------------- */
+$('#formNova').addEventListener('submit', async e => {
+  e.preventDefault();
+  limpa('#msgNova');
+  const s1 = $('#senha1').value, s2 = $('#senha2').value;
+
+  if (s1.length < 6){ msg('#msgNova','red','A senha precisa ter ao menos 6 caracteres.'); return; }
+  if (s1 !== s2){ msg('#msgNova','red','As senhas não conferem.'); return; }
+
+  carregando('#btnSalvarSenha', true);
+  const r = await definirNovaSenha(s1);
+  carregando('#btnSalvarSenha', false, '<i class="fa-solid fa-check"></i> Salvar nova senha');
+
+  if (!r.ok){ msg('#msgNova','red', r.msg); return; }
+  msg('#msgNova','green','Senha alterada. Abrindo o sistema…');
+  setTimeout(() => location.replace(ROTA_APP), 900);
+});
+
+/* ---------------- início ---------------- */
+(async function inicio(){
+  const ok = await checarSistema();
+  if (!ok) return;
+
+  if (await checarRecuperacao()) return;
+
+  // já logado? vai direto para o app
+  const s = await sessaoAtual();
+  if (s){
+    const next = new URLSearchParams(location.search).get('next');
+    location.replace(next && /^[\w.-]+\.html/.test(next) ? next : ROTA_APP);
+    return;
+  }
+  $('#email').focus();
+})();
+</script>
+</body>
+</html>
