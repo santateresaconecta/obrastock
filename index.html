@@ -31,7 +31,50 @@
      a tela quando servido por http(s), onde o guard.js realmente vai rodar. */
   if (location.protocol !== 'file:'){
     document.documentElement.style.visibility = 'hidden';
-    setTimeout(function(){ document.documentElement.style.visibility = ''; }, 6000);
+
+    /* Rede de segurança. Se o guard.js não rodar — arquivo faltando no
+       servidor, cache velho do service worker, queda de rede — a tela
+       voltava a aparecer sozinha depois de 6s mostrando um sistema vazio,
+       sem nunca levar ninguém ao login. Quem via isso achava que o sistema
+       tinha quebrado. Agora dizemos o que houve e damos a saída. */
+    setTimeout(function(){
+      document.documentElement.style.visibility = '';
+      if (window.__obrastockGuardOk) return;   // tudo certo, o guard assumiu
+
+      var d = document.createElement('div');
+      d.setAttribute('role', 'alert');
+      d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0f1720;' +
+        'color:#e8eef5;display:flex;align-items:center;justify-content:center;' +
+        'padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+      d.innerHTML =
+        '<div style="max-width:420px;text-align:center">' +
+        '<div style="font-size:40px;line-height:1;margin-bottom:14px">&#9888;</div>' +
+        '<h1 style="font-size:19px;margin:0 0 10px">Não foi possível iniciar o sistema</h1>' +
+        '<p style="font-size:14px;line-height:1.6;color:#9fb6d1;margin:0 0 18px">' +
+        'Os arquivos do aplicativo não carregaram. Em geral é uma versão antiga ' +
+        'presa no navegador. O botão abaixo limpa e recarrega.</p>' +
+        '<button id="obLimpar" style="background:#f0a500;color:#3a2600;border:0;' +
+        'border-radius:10px;padding:12px 20px;font-weight:700;font-size:15px;' +
+        'cursor:pointer;width:100%;margin-bottom:10px">Limpar e tentar de novo</button>' +
+        '<a href="login.html" style="display:block;color:#9fb6d1;font-size:14px">' +
+        'Ir para a tela de login</a></div>';
+      document.body.appendChild(d);
+
+      document.getElementById('obLimpar').addEventListener('click', async function(){
+        this.textContent = 'Limpando…';
+        try {
+          if (navigator.serviceWorker) {
+            var rs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(rs.map(function(r){ return r.unregister(); }));
+          }
+          if (window.caches) {
+            var ks = await caches.keys();
+            await Promise.all(ks.map(function(k){ return caches.delete(k); }));
+          }
+        } catch (e) {}
+        location.replace('login.html?r=' + Date.now());
+      });
+    }, 6000);
   }
 </script>
 <noscript><style>html{visibility:visible !important}</style></noscript>
@@ -4524,5 +4567,5 @@ window.Stories = Stories;
   });
 })();
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a467377e4b4e2ed4',t:'MTc5MTMxNjQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
