@@ -4,7 +4,7 @@
    NÃO faz fila de escrita offline (decisão de escopo: conexão boa no galpão).
    ========================================================================== */
 
-const VERSION    = 'v2.0.0';
+const VERSION    = 'v2.0.1';
 const SHELL      = `obrastock-shell-${VERSION}`;
 const RUNTIME    = `obrastock-runtime-${VERSION}`;
 
@@ -77,14 +77,18 @@ self.addEventListener('fetch', event => {
       try {
         const preload = await event.preloadResponse;
         if (preload) {
-          (await caches.open(SHELL)).put('./index.html', preload.clone());
+          // Guardar sob a URL pedida, e não sempre como './index.html':
+          // senão uma visita a /login.html sobrescreve o app no cache, e
+          // offline o usuário recebe a página errada.
+          if (preload.ok) (await caches.open(SHELL)).put(req, preload.clone());
           return preload;
         }
         const fresh = await fetch(req);
-        (await caches.open(SHELL)).put('./index.html', fresh.clone());
+        if (fresh && fresh.ok) (await caches.open(SHELL)).put(req, fresh.clone());
         return fresh;
       } catch (e) {
-        const cached = await caches.match('./index.html', { ignoreSearch: true });
+        const cached = await caches.match(req, { ignoreSearch: true })
+                    || await caches.match('./index.html', { ignoreSearch: true });
         return cached || new Response(
           '<!doctype html><meta charset="utf-8"><title>Sem conexão</title>' +
           '<body style="font-family:system-ui;padding:40px;text-align:center;color:#0f2742">' +
