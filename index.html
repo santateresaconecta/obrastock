@@ -37,10 +37,9 @@
        voltava a aparecer sozinha depois de 6s mostrando um sistema vazio,
        sem nunca levar ninguém ao login. Quem via isso achava que o sistema
        tinha quebrado. Agora dizemos o que houve e damos a saída. */
-    setTimeout(function(){
-      document.documentElement.style.visibility = '';
-      if (window.__obrastockGuardOk) return;   // tudo certo, o guard assumiu
-
+    /* Monta o aviso de falha. Separado para só ser chamado quando houver
+       mesmo uma falha — ver a checagem logo abaixo. */
+    var mostrarFalha = function(){
       var d = document.createElement('div');
       d.setAttribute('role', 'alert');
       d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0f1720;' +
@@ -74,6 +73,33 @@
         } catch (e) {}
         location.replace('login.html?r=' + Date.now());
       });
+    };
+
+    setTimeout(function(){
+      document.documentElement.style.visibility = '';
+      if (window.__obrastockGuardOk) return;   // tudo certo, o guard assumiu
+
+      /* O guard não sinalizou. Antes de assustar quem está usando, conferimos
+         se o arquivo realmente sumiu do servidor.
+
+         Motivo: um index.html novo junto de um assets/js/guard.js antigo (que
+         não conhece o sinal) é versão desencontrada, não falha. O sistema está
+         funcionando, e o aviso vira falso alarme permanente — não adianta nem
+         limpar o cache, porque o problema está no servidor. Já aconteceu em
+         produção. Então só acusamos quando o arquivo não responde de verdade. */
+      try {
+        fetch('assets/js/guard.js?checagem=' + Date.now(), { cache: 'no-store' })
+          .then(function(r){
+            if (r && r.ok){
+              console.warn('[ObraStock] guard.js respondeu mas não sinalizou. ' +
+                'index.html e assets/js/guard.js estão em versões diferentes: ' +
+                'atualize assets/js/guard.js no servidor.');
+              return;   // app saudável — nada de aviso
+            }
+            mostrarFalha();
+          })
+          .catch(mostrarFalha);
+      } catch (e) { mostrarFalha(); }
     }, 6000);
   }
 </script>
