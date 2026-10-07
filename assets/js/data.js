@@ -31,23 +31,62 @@ import { perfil } from './auth.js';
 const paraCamel = s => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const paraSnake = s => s.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
 
+/* -----------------------------------------------------------------------------
+   APELIDOS DE COLUNA
+   A conversao automatica camelCase <-> snake_case resolve quase tudo, mas nao
+   quando os dois lados escolheram nomes diferentes para a mesma coisa. A
+   interface sempre chamou a nota de "nfId"; no banco a coluna e "nota_id".
+   A conversao gerava "nf_id", coluna que nao existe, e o PostgREST recusava a
+   gravacao inteira com HTTP 400 — foi o que impediu de lancar qualquer nota. */
+const APELIDO_DB = { nfId: 'nota_id' };
+const APELIDO_UI = Object.fromEntries(
+  Object.entries(APELIDO_DB).map(([ui, db]) => [db, ui]));
+
 function linhaParaUI(row){
   if (!row) return row;
   const out = {};
-  for (const k in row) out[paraCamel(k)] = row[k];
+  for (const k in row) out[APELIDO_UI[k] || paraCamel(k)] = row[k];
   return out;
 }
 function linhaParaBanco(obj){
   const out = {};
   for (const k in obj){
     if (obj[k] === undefined) continue;
-    out[paraSnake(k)] = obj[k];
+    out[APELIDO_DB[k] || paraSnake(k)] = obj[k];
   }
   return out;
 }
 
 /** Campos que existem só na interface e não têm coluna no banco. */
-const IGNORAR = new Set(['mat', 'criadoEm', 'atualizadoEm']);
+const IGNORAR = new Set(['mat', 'criadoEm', 'atualizadoEm', 'itens']);
+
+/* Os produtos de uma NF-e moram na tabela filha nota_itens, uma linha por
+   produto. A interface os carrega aninhados em nota.itens, e enviar esse
+   vetor junto do insert de "notas" fazia o PostgREST devolver 400. */
+function itensParaBanco(notaId, itens){
+  return (itens || []).map(i => ({
+    nota_id:        notaId,
+    material_id:    i.materialId || null,
+    descricao:      i.descricao || '',
+    ncm:            i.ncm  || null,
+    cfop:           i.cfop || null,
+    ean:            i.ean  || null,
+    quantidade:     Number(i.qtd ?? i.quantidade ?? 0),
+    unidade:        i.unidade || null,
+    valor_unitario: Number(i.valorUnit  ?? i.valorUnitario ?? 0),
+    valor_total:    Number(i.valorTotal ?? 0)
+  }));
+}
+
+/* De volta para o formato que as telas de nota esperam (qtd, valorUnit...). */
+function itensParaUI(linhas){
+  return (linhas || []).map(r => ({
+    materialId: r.material_id, descricao: r.descricao,
+    ncm: r.ncm, cfop: r.cfop, ean: r.ean,
+    qtd: Number(r.quantidade), unidade: r.unidade,
+    valorUnit: Number(r.valor_unitario), valorTotal: Number(r.valor_total)
+  }));
+}
 function limpar(obj){
   const out = {};
   for (const k in obj) if (!IGNORAR.has(k)) out[k] = obj[k];
@@ -86,21 +125,32 @@ export class SupabaseAdapter {
   /* ---------------- carga inicial ---------------- */
   async carregar(){
     const sel = t => this.sb.from(t).select('*');
-    const [mat, obr, forn, mov, nf, cat, emp] = await Promise.all([
+    const [mat, obr, forn, mov, nf, cat, emp, itens] = await Promise.all([
       sel('materiais'), sel('obras'), sel('fornecedores'),
       this.sb.from('movimentacoes').select('*').order('data', { ascending: false }),
       sel('notas'), sel('categorias'),
-      this.sb.from('empresas').select('*').eq('id', this.empresaId).single()
+      this.sb.from('empresas').select('*').eq('id', this.empresaId).single(),
+      // produtos das NF-e: tabela separada, reagrupada por nota logo abaixo
+      sel('nota_itens')
     ]);
 
-    const erro = [mat, obr, forn, mov, nf, cat, emp].find(r => r.error);
+    const erro = [mat, obr, forn, mov, nf, cat, emp, itens].find(r => r.error);
     if (erro) throw new Error(traduzErro(erro.error));
 
     this.cache.materiais     = (mat.data  || []).map(linhaParaUI);
     this.cache.obras         = (obr.data  || []).map(linhaParaUI);
     this.cache.fornecedores  = (forn.data || []).map(linhaParaUI);
     this.cache.movimentacoes = (mov.data  || []).map(linhaParaUI);
-    this.cache.notas         = (nf.data   || []).map(linhaParaUI);
+    /* Reagrupa os produtos por nota: as telas de NF-e leem nota.itens. */
+    const porNota = {};
+    (itens.data || []).forEach(r => {
+      (porNota[r.nota_id] = porNota[r.nota_id] || []).push(r);
+    });
+    this.cache.notas         = (nf.data   || []).map(r => {
+      const n = linhaParaUI(r);
+      n.itens = itensParaUI(porNota[r.id]);
+      return n;
+    });
     this.cache.categorias    = (cat.data  || []).map(linhaParaUI);
 
     const p = perfil() || {};
@@ -161,6 +211,9 @@ export class SupabaseAdapter {
     ));
     if (c === 'movimentacoes') payload.criado_por = this.perfilId;
 
+    // os produtos da NF-e nao sao colunas de "notas": vao para nota_itens
+    const itens = (c === 'notas') ? itensParaBanco(row.id, obj.itens) : null;
+
     this._enfileirar(async () => {
       const { data, error } = await this.sb.from(tabela).insert(payload).select().single();
       if (error){
@@ -170,9 +223,27 @@ export class SupabaseAdapter {
         this._falhou(traduzErro(error));
         return;
       }
+
+      if (itens && itens.length){
+        const ri = await this.sb.from('nota_itens').insert(itens);
+        if (ri.error){
+          /* A nota ja gravou. Apagamos para nao deixar uma NF-e sem produtos,
+             que apareceria na lista como se estivesse completa. */
+          await this.sb.from('notas').delete().eq('id', row.id);
+          const i = this.cache[c].findIndex(r => r.id === row.id);
+          if (i >= 0) this.cache[c].splice(i, 1);
+          this._falhou(traduzErro(ri.error));
+          return;
+        }
+      }
       // o banco pode ter calculado colunas (valor_total, custo médio); sincroniza
       const i = this.cache[c].findIndex(r => r.id === row.id);
-      if (i >= 0) this.cache[c][i] = linhaParaUI(data);
+      if (i >= 0){
+        const atualizado = linhaParaUI(data);
+        // o banco nao devolve os itens: mantemos os que a tela ja mostra
+        if (c === 'notas') atualizado.itens = obj.itens || [];
+        this.cache[c][i] = atualizado;
+      }
       if (c === 'movimentacoes') await this._recarregarMateriais();
     });
 

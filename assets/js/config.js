@@ -17,7 +17,7 @@ export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 /* Marca do aplicativo (usada na tela de login e nos e-mails) */
 export const APP_NOME    = 'ObraStock';
 export const APP_DESC    = 'Gestão de Estoque';
-export const APP_VERSAO  = 'v2.0.0';
+export const APP_VERSAO  = 'v2.0.1';
 
 /* -----------------------------------------------------------------------------
    DESENVOLVEDOR
