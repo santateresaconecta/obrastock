@@ -164,6 +164,10 @@ function confirmarSaida(){
    INÍCIO
 -------------------------------------------------------------------------- */
 (async function iniciar(){
+  /* Avisa a rede de segurança do index.html que o guard assumiu.
+     Sem isto ela mostraria o aviso de falha por cima de um app saudável. */
+  window.__obrastockGuardOk = true;
+
   if (!CONFIGURADO){
     liberarTela();
     if (document.readyState === 'loading')

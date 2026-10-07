@@ -11,8 +11,8 @@
    ela ignora toda a segurança.
 ============================================================================= */
 
-export const SUPABASE_URL  = 'https://cushcsfmuhjywdlgjudm.supabase.co';
-export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c2hjc2ZtdWhqeXdkbGdqdWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNDgxMzQsImV4cCI6MjEwNjcyNDEzNH0.AaxBA4zLo2wKTotyoho-2lPYOdpq5q3STfA9kng96D0';
+export const SUPABASE_URL  = 'COLE_AQUI_SUA_PROJECT_URL';
+export const SUPABASE_ANON = 'COLE_AQUI_SUA_ANON_KEY';
 
 /* Marca do aplicativo (usada na tela de login e nos e-mails) */
 export const APP_NOME    = 'ObraStock';
