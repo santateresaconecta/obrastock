@@ -1,0 +1,42 @@
+{
+  // ===========================================================================
+  // ObraStock — configuração do Cloudflare Workers (assets estáticos)
+  // ===========================================================================
+  // Este site é publicado como WORKER (obrastock.obrastock.workers.dev), e não
+  // como Cloudflare Pages. A Cloudflare passou a oferecer Workers como opção
+  // padrão para sites estáticos, e as regras de roteamento são diferentes das
+  // do Pages. Sem este arquivo o Worker não sabe como servir HTML.
+  //
+  // O nome precisa bater com o Worker já existente no painel, senão o deploy
+  // cria um segundo Worker em outro endereço.
+  "name": "obrastock",
+  "compatibility_date": "2026-10-06",
+
+  "assets": {
+    // A raiz do repositório é o próprio site: não há etapa de build.
+    "directory": "./",
+
+    // ---------------------------------------------------------------------
+    // html_handling: "none"  — ESCOLHA DELIBERADA, não deixe no padrão.
+    //
+    // O padrão da Cloudflare é "auto-trailing-slash", que REESCREVE as URLs:
+    // um pedido a /login.html é respondido com um redirecionamento para
+    // /login, e /index.html vira /. Isso briga de frente com este sistema,
+    // porque o código aponta para os arquivos com a extensão explícita:
+    // o guard.js manda o usuário para "login.html?next=index.html", o
+    // _headers tem regras para /index.html e /login.html, e o service worker
+    // guarda o shell sob "./index.html".
+    //
+    // Com "none" a Cloudflare serve exatamente o caminho pedido, sem inventar
+    // redirecionamento. Menos uma viagem de ida e volta em cada checagem de
+    // sessão, e as regras do _headers voltam a casar com o que é servido.
+    "html_handling": "none",
+
+    // Com html_handling "none", a Cloudflare deixa de servir index.html
+    // automaticamente na raiz "/". Esta opção cobre isso: qualquer caminho
+    // que não corresponda a um arquivo real devolve o index.html, e o
+    // guard.js decide se manda para o login. Arquivos que existem de verdade
+    // (login.html, assets/js/*.js, ícones) continuam tendo prioridade.
+    "not_found_handling": "single-page-application"
+  }
+}

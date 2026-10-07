@@ -1,7 +1,30 @@
-# ObraStock — rotas amigáveis no Cloudflare Pages
-# Formato: origem  destino  código
-
-# Permite digitar /login em vez de /login.html
-/login      /login.html     301
-/entrar     /login.html     301
-/sistema    /index.html     301
+# =============================================================================
+# ObraStock — redirecionamentos
+# =============================================================================
+# Este arquivo está intencionalmente SEM REGRAS. Não é esquecimento.
+#
+# Ele tinha três atalhos de conveniência:
+#
+#     /login      /login.html     301
+#     /entrar     /login.html     301
+#     /sistema    /index.html     301
+#
+# Eles foram escritos pensando no Cloudflare Pages. O site, porém, está
+# publicado como Cloudflare WORKER, e ali o roteamento de assets estáticos
+# remove a extensão .html por conta própria. O resultado é um ciclo:
+#
+#     /login  --(regra acima)-->  /login.html  --(Cloudflare)-->  /login  ...
+#
+# A Cloudflare detecta esse padrão e recusa a configuração inteira com
+# "Infinite loop detected in this rule. This would cause a redirect to strip
+# .html or /index and end up triggering this rule again." (código 100324).
+# Quando isso acontece, o roteamento de HTML para de funcionar e todas as
+# páginas passam a responder erro 500 — exatamente o que estava acontecendo.
+#
+# Os atalhos não fazem falta: com "not_found_handling": "single-page-application"
+# no wrangler.jsonc, quem digitar /login recebe o index.html e o guard.js o
+# encaminha para a tela de login do mesmo jeito.
+#
+# Se um dia precisar mesmo de uma regra aqui, confira antes se ela não aponta
+# para um caminho terminado em .html ou /index.
+# =============================================================================

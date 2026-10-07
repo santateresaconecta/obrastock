@@ -137,7 +137,12 @@ self.addEventListener('fetch', event => {
   }
 
   /* CDN (Google Fonts, Font Awesome): stale-while-revalidate.
-     Responde instantâneo do cache e atualiza em segundo plano. */
+     Responde instantâneo do cache e atualiza em segundo plano.
+
+     Estes três domínios PRECISAM estar em connect-src no _headers. O pedido
+     original é de estilo/fonte, mas nós o refazemos aqui com fetch() — e
+     fetch() dentro do service worker é avaliado como connect-src. Sem isso
+     o navegador recusa a conexão e o site carrega sem estilo. */
   if (/fonts\.(googleapis|gstatic)\.com|cdnjs\.cloudflare\.com/.test(url.hostname)) {
     event.respondWith((async () => {
       const cache = await caches.open(RUNTIME);

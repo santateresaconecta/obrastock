@@ -1,0 +1,33 @@
+# =============================================================================
+# ObraStock — o que NÃO deve ir para o site publicado
+# =============================================================================
+# Como o site é servido a partir da raiz do repositório, sem etapa de build,
+# tudo o que está aqui seria publicado junto. Este arquivo mantém fora do ar
+# o que é de desenvolvimento ou de servidor.
+#
+# Importante: os scripts .sql do Supabase não são segredo (não contêm senha
+# nem chave), mas não há motivo para servi-los ao público.
+# =============================================================================
+
+# Configuração do próprio Worker
+wrangler.jsonc
+.assetsignore
+
+# Banco de dados e código de servidor
+supabase/
+
+# Testes e ferramentas de desenvolvimento
+test-*.js
+shots.js
+serve-headers.js
+mock/
+pv/
+
+# Documentação interna
+*.md
+!LEIA-ME.md
+
+# Lixo que entrou no repositório por engano
+.sudo_as_admin_successful
+.github/
+.gitignore
