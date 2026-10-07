@@ -345,7 +345,7 @@ export class SupabaseAdapter {
 }
 
 /* =============================================================================
-   INICIALIZAÇÃO
+   INICIALIZAÇÃO IMPORTANTE
 ============================================================================= */
 export async function iniciarDados(){
   const p = perfil();
