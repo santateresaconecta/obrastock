@@ -125,6 +125,37 @@
 <meta name="apple-mobile-web-app-title" content="ObraStock">
 <meta name="application-name" content="ObraStock">
 <style>
+/* ---------------------------------------------------------------------------
+   Foto do material
+   A miniatura usa as variaveis de tema (--card, --linha, --txt-2) para
+   acompanhar o modo escuro sem regra extra. object-fit:cover recorta sem
+   distorcer: foto de celular e retangular e a moldura e quadrada.
+--------------------------------------------------------------------------- */
+.foto-campo{ display:flex; gap:14px; align-items:flex-start; }
+.foto-prev{
+  width:96px; height:96px; flex-shrink:0; border-radius:12px;
+  border:1px dashed var(--gray-300); background:var(--surface-2);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden; color:var(--gray-400); font-size:26px;
+}
+.foto-prev img{ width:100%; height:100%; object-fit:cover; display:block; }
+.foto-acoes{ display:flex; flex-direction:column; gap:8px; align-items:flex-start; min-width:0; }
+.foto-msg{ font-size:12px; color:var(--gray-500); line-height:1.4; }
+
+/* Miniatura na listagem. Some no celular: a lista ja e apertada e a foto
+   roubaria a linha da descricao. */
+.mat-foto{
+  width:38px; height:38px; border-radius:8px; object-fit:cover;
+  flex-shrink:0; border:1px solid var(--gray-200); background:var(--surface-2);
+}
+.mat-foto-vazia{
+  width:38px; height:38px; border-radius:8px; flex-shrink:0;
+  border:1px dashed var(--gray-300); background:var(--surface-2);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--gray-400); font-size:13px;
+}
+@media (max-width:560px){ .foto-prev{ width:78px; height:78px; } }
+
 :root{
   --navy:#0f2742; --navy-2:#16375c; --navy-3:#1e4b7a;
   --blue:#1d6fe0; --blue-dark:#1558b4; --blue-soft:#e8f1fd;
@@ -727,7 +758,7 @@ textarea.input{min-height:80px;resize:vertical}
     </button>
     <div class="sb-foot">
       <b id="sbUser">Responsável</b>
-      <span id="sbVersion">Protótipo v1.1 · localStorage</span>
+      <span id="sbVersion"></span>
     </div>
   </aside>
 
@@ -762,64 +793,48 @@ textarea.input{min-height:80px;resize:vertical}
 <div id="modalRoot"></div>
 <script>
 /* ==========================================================================
-   OBRASTOCK — Protótipo de Gestão de Estoque para Construtora
-   Camada de dados abstraída (localStorage hoje → Supabase depois)
+   OBRASTOCK — Gestão de Estoque para Construtora
+   Os dados moram no Supabase. Esta camada só fala com DB.*
    ========================================================================== */
 'use strict';
 
 /* --------------------------------------------------------------------------
-   1. STORAGE ADAPTER
-   Toda a UI fala APENAS com DB.*  — nunca com localStorage diretamente.
-   Para migrar ao Supabase basta criar um SupabaseAdapter com a mesma
-   interface (list/get/insert/update/remove/query) e trocar a linha
-   "const Adapter = new LocalStorageAdapter('obrastock')".
-   Os métodos já são async-ready (retornam valores diretos, mas a camada
-   DB encapsula tudo para que a troca por Promises seja trivial).
+   1. ADAPTADOR INICIAL (memória)
+
+   Os dados do sistema ficam no Supabase. Este adaptador existe só para o
+   intervalo entre o HTML carregar e a camada remota assumir: os <script>
+   clássicos rodam antes dos módulos, e sem alguém no lugar o primeiro
+   render quebraria.
+
+   Ele NÃO grava em lugar nenhum. É de propósito. A versão anterior guardava
+   tudo no localStorage do navegador, e isso em produção é perigoso: se o
+   banco estivesse fora do ar, a tela continuaria aceitando lançamentos e o
+   usuário sairia convencido de que registrou a saída de material — quando
+   nada tinha saído do celular dele.
+
+   Na prática o usuário nunca vê este adaptador: o guard mantém a tela
+   oculta até os dados do banco chegarem, e mostra um aviso se falharem.
 -------------------------------------------------------------------------- */
-class LocalStorageAdapter {
-  constructor(ns){ this.ns = ns; this.mem = {}; this.ok = this._test(); }
-  _test(){
-    try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; }
-    catch(e){ console.warn('localStorage indisponível — usando memória'); return false; }
-  }
-  _key(c){ return this.ns + ':' + c; }
-  _read(c){
-    if(!this.ok) return this.mem[c] ? JSON.parse(JSON.stringify(this.mem[c])) : [];
-    try{ const r = localStorage.getItem(this._key(c)); return r ? JSON.parse(r) : []; }
-    catch(e){ return []; }
-  }
-  _write(c, rows){
-    if(!this.ok){ this.mem[c] = rows; return rows; }
-    try{ localStorage.setItem(this._key(c), JSON.stringify(rows)); }
-    catch(e){ Toast.err('Armazenamento cheio', 'Não foi possível salvar. Libere espaço do navegador.'); }
-    return rows;
-  }
-  list(c){ return this._read(c); }
-  get(c,id){ return this._read(c).find(r=>r.id===id) || null; }
+class AdapterInicial {
+  constructor(){ this.mem = {}; this.ok = false; }
+  _rows(c){ return this.mem[c] || (this.mem[c] = []); }
+  list(c){ return this._rows(c).slice(); }
+  get(c,id){ return this._rows(c).find(r=>r.id===id) || null; }
   insert(c,obj){
-    const rows=this._read(c);
-    const row=Object.assign({id:UID(), criadoEm:new Date().toISOString()}, obj);
-    rows.push(row); this._write(c,rows); return row;
+    const row = Object.assign({id:UID(), criadoEm:new Date().toISOString()}, obj);
+    this._rows(c).push(row); return row;
   }
-  insertMany(c,arr){
-    const rows=this._read(c); const created=[];
-    arr.forEach(o=>{ const r=Object.assign({id:UID(),criadoEm:new Date().toISOString()},o); rows.push(r); created.push(r); });
-    this._write(c,rows); return created;
-  }
+  insertMany(c,arr){ return (arr||[]).map(o=>this.insert(c,o)); }
   update(c,id,patch){
-    const rows=this._read(c); const i=rows.findIndex(r=>r.id===id);
+    const rows=this._rows(c); const i=rows.findIndex(r=>r.id===id);
     if(i<0) return null;
     rows[i]=Object.assign({},rows[i],patch,{atualizadoEm:new Date().toISOString()});
-    this._write(c,rows); return rows[i];
+    return rows[i];
   }
-  remove(c,id){ const rows=this._read(c).filter(r=>r.id!==id); this._write(c,rows); return true; }
-  replaceAll(c,rows){ return this._write(c,rows); }
-  clear(c){ return this._write(c,[]); }
-  meta(k,v){
-    if(v===undefined){ try{ return JSON.parse(localStorage.getItem(this._key('_meta:'+k))||'null'); }catch(e){ return null; } }
-    try{ localStorage.setItem(this._key('_meta:'+k), JSON.stringify(v)); }catch(e){}
-    return v;
-  }
+  remove(c,id){ this.mem[c]=this._rows(c).filter(r=>r.id!==id); return true; }
+  replaceAll(c,rows){ this.mem[c]=rows; return rows; }
+  clear(c){ this.mem[c]=[]; return []; }
+  meta(){ return null; }
 }
 
 const COL = {
@@ -827,15 +842,10 @@ const COL = {
   NF:'notas', CAT:'categorias', CFG:'config'
 };
 
-let Adapter = new LocalStorageAdapter('obrastock');
+let Adapter = new AdapterInicial();
 
-/* Ponte com a camada Supabase (assets/js/data.js).
-   O script clássico roda antes dos módulos, então o app sempre sobe em modo
-   local e a camada remota assume quando os dados chegam. A flag persistida
-   evita semear dados de demonstração por cima de um banco real. */
-const MODO_REMOTO = (function(){
-  try { return localStorage.getItem('obrastock:modo') === 'remoto'; } catch(e){ return false; }
-})();
+/* Ponte com a camada Supabase (assets/js/data.js): quando os dados do banco
+   chegam, o adaptador de verdade entra no lugar e a tela se redesenha. */
 window.ObraStockTrocarAdapter = function(novo){
   Adapter = novo;
   if (window.App && App.render) App.render();
@@ -859,13 +869,10 @@ const DB = {
     fornecedores:Adapter.list(COL.FORN), movimentacoes:Adapter.list(COL.MOV),
     notas:Adapter.list(COL.NF), categorias:Adapter.list(COL.CAT), config:Adapter.list(COL.CFG)
   }),
-  importAll:(data)=>{
-    ['materiais','obras','fornecedores','movimentacoes','notas','categorias','config'].forEach(k=>{
-      const colKey = {materiais:COL.MAT,obras:COL.OBRA,fornecedores:COL.FORN,movimentacoes:COL.MOV,notas:COL.NF,categorias:COL.CAT,config:COL.CFG}[k];
-      if(Array.isArray(data[k])) Adapter.replaceAll(colKey, data[k]);
-    });
-  },
-  wipe:()=>{ Object.values(COL).forEach(c=>Adapter.clear(c)); Adapter.meta('seeded', false); }
+  /* Não existe mais importAll nem wipe. Os dois escreviam só no espelho em
+     memória: a tela esvaziava, o usuário achava que tinha apagado ou
+     restaurado, e no F5 seguinte tudo voltava do banco. Restauração de
+     backup é operação de servidor, não de botão no navegador. */
 };
 
 const DEFAULT_CFG = {
@@ -1369,227 +1376,6 @@ const Mov = {
 -------------------------------------------------------------------------- */
 const CATEGORIAS_PADRAO = ['Cimento','Areia','Brita','Tijolos','Blocos','Ferragens','Tubulações','Elétrica','Hidráulica','Argamassa','Madeira','Ferramentas','EPIs','Outros'];
 const UNIDADES = ['SC','UN','M','M2','M3','KG','TN','BR','CX','PC','L','MIL','PAR','RL','GL'];
-
-function seed(){
-  if(Adapter.meta('seeded')) return;
-
-  DB.config.set(DEFAULT_CFG);
-  CATEGORIAS_PADRAO.forEach(c=>DB.categorias.add({nome:c}));
-
-  /* ---- OBRAS ---- */
-  const obras = [
-    {nome:'Obra Santa Teresa',    codigo:'OB-001', endereco:'Rua Jerônimo Vervloet, 320 — Centro, Santa Teresa/ES', responsavel:'Mestre Jorge Bianchi',  inicio:'2025-03-10', status:'andamento', obs:'Residencial multifamiliar — 12 unidades.'},
-    {nome:'Obra Residencial Colina',codigo:'OB-002', endereco:'Av. das Palmeiras, 1180 — São Roque, Santa Teresa/ES', responsavel:'Mestre Antônio Schwambach', inicio:'2025-06-02', status:'andamento', obs:'Sobrado de alto padrão.'},
-    {nome:'Obra Vale do Canaã',   codigo:'OB-003', endereco:'Estrada Vale do Canaã, km 4 — Santa Teresa/ES', responsavel:'Mestre Paulo Hoffmann',  inicio:'2026-02-01', status:'planejada', obs:'Início previsto para fevereiro/2026.'},
-    {nome:'Obra Centro Comercial',codigo:'OB-004', endereco:'Rua do Comércio, 45 — Centro, Santa Teresa/ES', responsavel:'A definir', inicio:'2026-03-15', status:'planejada', obs:'Galpão comercial — projeto em aprovação.'}
-  ].map(o=>DB.obras.add(o));
-
-  /* ---- FORNECEDORES ---- */
-  const forn = [
-    {razaoSocial:'Depósito Central Materiais de Construção Ltda', fantasia:'Depósito Central', cnpj:'08.412.556/0001-34', telefone:'(27) 3259-1420', email:'vendas@depositocentral.com.br', cidade:'Santa Teresa/ES', obs:'Entrega em 48h. Melhor preço em cimento.'},
-    {razaoSocial:'Concrebras Materiais e Agregados S/A', fantasia:'Concrebras', cnpj:'14.775.903/0001-08', telefone:'(27) 3223-8800', email:'comercial@concrebras.com.br', cidade:'Serra/ES', obs:'Areia, brita e concreto usinado. Entrega direta na obra.'},
-    {razaoSocial:'Ferro & Aço Capixaba Comércio Ltda', fantasia:'Ferro & Aço Capixaba', cnpj:'22.309.118/0001-77', telefone:'(27) 3337-4510', email:'pedidos@ferroaco.com.br', cidade:'Vitória/ES', obs:'Vergalhões e telas. Pagamento 30/60 dias.'},
-    {razaoSocial:'Eletrohidráulica Montanhas Ltda ME', fantasia:'Eletrohidráulica Montanhas', cnpj:'31.664.207/0001-51', telefone:'(27) 3259-7733', email:'contato@ehmontanhas.com.br', cidade:'Santa Teresa/ES', obs:'Elétrica e hidráulica em geral.'},
-    {razaoSocial:'Cerâmica São João Indústria e Comércio Ltda', fantasia:'Cerâmica São João', cnpj:'05.988.441/0001-22', telefone:'(27) 3265-2010', email:'vendas@ceramicasaojoao.com.br', cidade:'Colatina/ES', obs:'Blocos e tijolos. Entrega direta no canteiro.'},
-    {razaoSocial:'Protege EPI Segurança do Trabalho Ltda', fantasia:'Protege EPI', cnpj:'19.502.884/0001-46', telefone:'(27) 3345-9021', email:'protege@protegeepi.com.br', cidade:'Vila Velha/ES', obs:'EPIs certificados com CA.'}
-  ].map(f=>DB.fornecedores.add(f));
-
-  /* ---- MATERIAIS ---- */
-  const M = [
-    ['MAT-001','Cimento CP-II-E-32 saco 50kg','Cimento','SC',50,300,41.90,'7896001020304','CIM-CPII-50',0],
-    ['MAT-002','Cimento CP-V ARI saco 50kg','Cimento','SC',20,80,48.50,'7896001020311','CIM-CPV-50',0],
-    ['MAT-003','Areia média lavada','Areia','M3',15,60,118.00,'','AR-MED',1],
-    ['MAT-004','Areia grossa','Areia','M3',10,40,105.00,'','AR-GRO',1],
-    ['MAT-005','Brita nº 1','Brita','M3',12,50,132.00,'','BR-01',1],
-    ['MAT-006','Brita nº 0 (pedrisco)','Brita','M3',8,30,128.00,'','BR-00',1],
-    ['MAT-007','Tijolo cerâmico 8 furos 9x19x19','Tijolos','MIL',5,20,890.00,'','TJ-8F',4],
-    ['MAT-008','Bloco de concreto estrutural 14x19x39','Blocos','UN',800,4000,4.35,'7898456120017','BL-14',4],
-    ['MAT-009','Bloco de concreto vedação 9x19x39','Blocos','UN',600,3000,3.10,'7898456120024','BL-09',4],
-    ['MAT-010','Vergalhão CA-50 10mm barra 12m','Ferragens','BR',60,250,48.20,'7891234500107','VG-10',2],
-    ['MAT-011','Vergalhão CA-50 8mm barra 12m','Ferragens','BR',50,200,31.40,'7891234500084','VG-08',2],
-    ['MAT-012','Vergalhão CA-60 5mm barra 12m','Ferragens','BR',80,300,12.90,'7891234500053','VG-05',2],
-    ['MAT-013','Tela soldada Q-138 2,45x6,00m','Ferragens','PC',15,60,189.00,'','TL-Q138',2],
-    ['MAT-014','Arame recozido nº 18 rolo 1kg','Ferragens','RL',20,80,18.70,'7891234509018','AR-18',2],
-    ['MAT-015','Prego 17x27 com cabeça caixa 1kg','Ferragens','KG',25,100,16.40,'7891234501727','PR-1727',0],
-    ['MAT-016','Tubo PVC esgoto 100mm barra 6m','Tubulações','BR',20,80,68.90,'7896541230100','TB-E100',3],
-    ['MAT-017','Tubo PVC esgoto 50mm barra 6m','Tubulações','BR',20,80,32.50,'7896541230050','TB-E050',3],
-    ['MAT-018','Tubo PVC soldável 25mm barra 6m','Hidráulica','BR',30,120,24.80,'7896541230025','TB-S025',3],
-    ['MAT-019','Joelho PVC soldável 25mm 90°','Hidráulica','UN',100,400,2.15,'7896541231025','JL-S025',3],
-    ['MAT-020','Caixa d\'água polietileno 1000L','Hidráulica','UN',2,8,589.00,'7896541239100','CX-1000',3],
-    ['MAT-021','Registro esfera PVC 25mm','Hidráulica','UN',15,60,21.30,'7896541232025','RG-E025',3],
-    ['MAT-022','Cabo flexível 2,5mm² rolo 100m','Elétrica','RL',8,30,268.00,'7898112340025','CB-25',3],
-    ['MAT-023','Cabo flexível 4,0mm² rolo 100m','Elétrica','RL',5,20,412.00,'7898112340040','CB-40',3],
-    ['MAT-024','Eletroduto flexível corrugado 25mm rolo 50m','Elétrica','RL',10,40,62.00,'7898112345025','ED-25',3],
-    ['MAT-025','Caixa de luz 4x2 PVC','Elétrica','UN',60,250,2.45,'7898112349042','CL-42',3],
-    ['MAT-026','Disjuntor monopolar 20A','Elétrica','UN',20,80,14.90,'7898112348020','DJ-20',3],
-    ['MAT-027','Argamassa colante AC-II saco 20kg','Argamassa','SC',30,150,23.40,'7896001030204','AG-ACII',0],
-    ['MAT-028','Argamassa de rejunte 5kg','Argamassa','SC',20,80,14.20,'7896001030501','AG-REJ',0],
-    ['MAT-029','Cal hidratada CH-III saco 20kg','Argamassa','SC',25,100,17.80,'7896001040203','CAL-CHIII',0],
-    ['MAT-030','Tábua pinus 30cm x 3m','Madeira','PC',30,120,42.00,'','MD-TB30',0],
-    ['MAT-031','Caibro 5x6cm x 3m','Madeira','PC',40,160,26.50,'','MD-CB56',0],
-    ['MAT-032','Chapa compensado plastificado 18mm 1,10x2,20m','Madeira','PC',12,50,168.00,'','MD-CP18',0],
-    ['MAT-033','Betoneira 400L (patrimônio)','Ferramentas','UN',0,0,4890.00,'','FR-BET400',0],
-    ['MAT-034','Carrinho de mão 60L reforçado','Ferramentas','UN',4,12,189.00,'7899001100601','FR-CAR60',0],
-    ['MAT-035','Desempenadeira de aço 12x24','Ferramentas','UN',6,20,38.90,'7899001101224','FR-DES',0],
-    ['MAT-036','Capacete de segurança branco CA 31469','EPIs','UN',15,50,24.90,'7899551300019','EPI-CAP',5],
-    ['MAT-037','Luva de raspa cano curto (par)','EPIs','PAR',20,80,12.50,'7899551300026','EPI-LUV',5],
-    ['MAT-038','Bota de segurança couro bico PVC nº 42','EPIs','PAR',8,30,98.00,'7899551300042','EPI-BOT',5],
-    ['MAT-039','Óculos de proteção incolor CA 34082','EPIs','UN',20,60,9.80,'7899551300033','EPI-OCU',5],
-    ['MAT-040','Lona plástica preta 4m x 100m','Outros','RL',3,12,298.00,'','OT-LON',0],
-    ['MAT-041','Impermeabilizante manta asfáltica 3mm 10m²','Outros','RL',6,24,189.00,'','OT-IMP',0],
-    ['MAT-042','Massa corrida PVA 18L','Outros','GL',10,40,78.00,'7896001050180','OT-MPVA',0]
-  ];
-  const mats = M.map(a=>DB.materiais.add({
-    codigo:a[0], descricao:a[1], categoria:a[2], unidade:a[3],
-    estoqueMinimo:a[4], estoqueIdeal:a[5], custoMedio:a[6],
-    ean:a[7], codFornecedor:a[8], fornecedorId: forn[a[9]] ? forn[a[9]].id : null, ativo:true
-  }));
-  const byCode = {}; mats.forEach(m=>byCode[m.codigo]=m);
-
-  /* ---- NOTAS FISCAIS + MOVIMENTAÇÕES ---- */
-  const cfg = DB.config.get();
-  const movs = [];
-  const nfs = [];
-
-  function mkNF(numero, serie, fIdx, data, valor, itens, obraId){
-    const f = forn[fIdx];
-    const nf = DB.notas.add({
-      numero:String(numero), serie:String(serie), chave:'32'+data.replace(/-/g,'').slice(2,6)+f.cnpj.replace(/\D/g,'')+'55'+String(serie).padStart(3,'0')+String(numero).padStart(9,'0')+'1'+String(Math.floor(Math.random()*100000000)).padStart(8,'0')+'7',
-      emissao:data, fornecedorId:f.id, emitenteNome:f.razaoSocial, emitenteCnpj:f.cnpj.replace(/\D/g,''),
-      destinatarioCnpj:cfg.cnpj.replace(/\D/g,''), valorTotal:valor, origem:'manual',
-      destino: obraId ? 'obra' : 'galpao', obraId: obraId||null, itens: itens
-    });
-    nfs.push(nf); return nf;
-  }
-  function mkMov(o){ movs.push(Object.assign({responsavel:cfg.usuario, criadoEm:new Date(o.data+'T09:00:00').toISOString()}, o)); }
-
-  /* --- Entradas no galpão (últimos 90 dias) --- */
-  const entradas = [
-    // [dias atrás, fornIdx, nf, [[codigo, qtd, valorUnit], ...]]
-    [86,0,'18420',[['MAT-001',220,40.90],['MAT-027',120,22.80],['MAT-029',80,17.20]]],
-    [82,2,'7731', [['MAT-010',200,47.50],['MAT-011',160,30.90],['MAT-012',240,12.60],['MAT-014',60,18.20]]],
-    [78,3,'4412', [['MAT-016',60,67.40],['MAT-017',60,31.90],['MAT-018',90,24.20],['MAT-019',350,2.10]]],
-    [74,3,'4451', [['MAT-022',22,262.00],['MAT-024',30,61.00],['MAT-025',200,2.40],['MAT-026',60,14.50]]],
-    [70,5,'2209', [['MAT-036',40,24.50],['MAT-037',60,12.20],['MAT-038',22,96.00],['MAT-039',48,9.60]]],
-    [64,0,'18693',[['MAT-015',80,16.10],['MAT-030',90,41.00],['MAT-031',120,26.00]]],
-    [58,1,'93318',[['MAT-003',45,116.00],['MAT-005',38,130.00]]],
-    [52,0,'18901',[['MAT-001',180,41.50],['MAT-002',60,48.00],['MAT-028',60,14.00]]],
-    [46,2,'7890', [['MAT-013',45,187.00],['MAT-010',150,48.80]]],
-    [40,0,'19102',[['MAT-032',36,166.00],['MAT-040',9,295.00],['MAT-041',18,186.00]]],
-    [34,3,'4610', [['MAT-020',6,585.00],['MAT-021',45,21.00],['MAT-023',14,408.00]]],
-    [28,1,'94027',[['MAT-004',28,104.00],['MAT-006',22,127.00]]],
-    [22,0,'19388',[['MAT-001',195,42.40],['MAT-027',90,23.90],['MAT-042',26,77.00]]],
-    [16,4,'55120',[['MAT-008',2400,4.30],['MAT-009',1800,3.05]]],
-    [11,0,'19501',[['MAT-034',9,187.00],['MAT-035',18,38.00],['MAT-033',1,4890.00]]],
-    [6, 2,'8015', [['MAT-011',120,31.80],['MAT-012',180,13.10]]],
-    [3, 3,'4722', [['MAT-018',60,25.10],['MAT-019',220,2.20],['MAT-025',150,2.50]]]
-  ];
-  entradas.forEach(e=>{
-    const [d,fi,nfnum,itens]=e, data=daysAgo(d);
-    const total = itens.reduce((s,i)=>s+i[1]*i[2],0);
-    const nf = mkNF(nfnum, 1, fi, data, Math.round(total*100)/100,
-      itens.map(i=>({codigo:byCode[i[0]].codigo, descricao:byCode[i[0]].descricao, qtd:i[1], unidade:byCode[i[0]].unidade, valorUnit:i[2], valorTotal:Math.round(i[1]*i[2]*100)/100, materialId:byCode[i[0]].id})), null);
-    itens.forEach(i=>{
-      const mat = byCode[i[0]];
-      mkMov({tipo:'entrada', data, materialId:mat.id, materialDesc:mat.descricao, unidade:mat.unidade,
-        quantidade:i[1], valorUnitario:i[2], valorTotal:Math.round(i[1]*i[2]*100)/100,
-        fornecedorId:forn[fi].id, nfNumero:String(nfnum), nfId:nf.id,
-        origem:forn[fi].fantasia, destino:'Galpão Central', obraId:null,
-        observacao:''});
-    });
-  });
-
-  /* --- Entradas diretas na obra --- */
-  const diretas = [
-    [72,1,'92877',0,[['MAT-003',30,117.00],['MAT-005',24,131.00]],'Concreto para fundação — descarga direta no canteiro.'],
-    [50,4,'54780',0,[['MAT-008',3000,4.28]],'Blocos entregues direto na Obra Santa Teresa.'],
-    [37,1,'93540',1,[['MAT-004',18,104.00],['MAT-006',14,126.00]],'Agregados para contrapiso.'],
-    [19,4,'55008',1,[['MAT-009',2200,3.08]],'Bloco de vedação — alvenaria 2º pavimento.'],
-    [8, 1,'94288',0,[['MAT-003',22,118.00]],'Reposição de areia no canteiro.'],
-    [4, 4,'55201',0,[['MAT-007',6,885.00]],'Tijolo cerâmico entregue direto — 6 mil peças.']
-  ];
-  diretas.forEach(e=>{
-    const [d,fi,nfnum,oi,itens,obs]=e, data=daysAgo(d), obra=obras[oi];
-    const total = itens.reduce((s,i)=>s+i[1]*i[2],0);
-    const nf = mkNF(nfnum, 1, fi, data, Math.round(total*100)/100,
-      itens.map(i=>({codigo:byCode[i[0]].codigo, descricao:byCode[i[0]].descricao, qtd:i[1], unidade:byCode[i[0]].unidade, valorUnit:i[2], valorTotal:Math.round(i[1]*i[2]*100)/100, materialId:byCode[i[0]].id})), obra.id);
-    itens.forEach(i=>{
-      const mat=byCode[i[0]];
-      mkMov({tipo:'entrada_direta', data, materialId:mat.id, materialDesc:mat.descricao, unidade:mat.unidade,
-        quantidade:i[1], valorUnitario:i[2], valorTotal:Math.round(i[1]*i[2]*100)/100,
-        fornecedorId:forn[fi].id, nfNumero:String(nfnum), nfId:nf.id,
-        origem:forn[fi].fantasia, destino:obra.nome, obraId:obra.id, observacao:obs});
-    });
-  });
-
-  /* --- Saídas para obras --- */
-  const saidas = [
-    [80,0,[['MAT-001',60],['MAT-010',40],['MAT-012',50]],'Fundação — sapatas e baldrames.'],
-    [76,0,[['MAT-016',12],['MAT-017',10],['MAT-018',20]],'Rede de esgoto sob radier.'],
-    [69,1,[['MAT-001',45],['MAT-011',35],['MAT-014',12]],'Pilares do térreo.'],
-    [62,0,[['MAT-036',12],['MAT-037',18],['MAT-039',14]],'Reposição de EPI para equipe.'],
-    [55,0,[['MAT-001',70],['MAT-027',30],['MAT-029',20]],'Alvenaria e chapisco.'],
-    [49,1,[['MAT-022',6],['MAT-024',8],['MAT-025',60]],'Infra elétrica lajes.'],
-    [43,0,[['MAT-013',14],['MAT-010',55]],'Armação da laje do 1º pavimento.'],
-    [38,1,[['MAT-030',24],['MAT-031',36],['MAT-032',10]],'Fôrmas de madeira.'],
-    [31,0,[['MAT-001',80],['MAT-003',0]],'Concretagem da laje.'],
-    [27,1,[['MAT-018',22],['MAT-019',90],['MAT-021',12]],'Instalação hidráulica banheiros.'],
-    [24,0,[['MAT-027',35],['MAT-028',16]],'Assentamento de cerâmica.'],
-    [18,1,[['MAT-001',55],['MAT-011',40]],'Vigas do 2º pavimento.'],
-    [14,0,[['MAT-020',2],['MAT-021',8],['MAT-023',4]],'Barrilete e reservatório.'],
-    [10,0,[['MAT-042',8],['MAT-041',5]],'Impermeabilização e acabamento.'],
-    [7, 1,[['MAT-012',60],['MAT-014',10],['MAT-015',15]],'Armação de escada.'],
-    [5, 0,[['MAT-036',6],['MAT-038',4],['MAT-037',10]],'EPI novos colaboradores.'],
-    [2, 0,[['MAT-001',40],['MAT-027',25]],'Reboco fachada frontal.'],
-    [1, 1,[['MAT-025',45],['MAT-026',14],['MAT-024',6]],'Quadro de distribuição e pontos.']
-  ];
-  saidas.forEach(e=>{
-    const [d,oi,itens,obs]=e, data=daysAgo(d), obra=obras[oi];
-    itens.forEach(i=>{
-      if(i[1]<=0) return;
-      const mat=byCode[i[0]];
-      mkMov({tipo:'saida', data, materialId:mat.id, materialDesc:mat.descricao, unidade:mat.unidade,
-        quantidade:i[1], valorUnitario:mat.custoMedio, valorTotal:Math.round(i[1]*mat.custoMedio*100)/100,
-        fornecedorId:null, nfNumero:'', nfId:null,
-        origem:'Galpão Central', destino:obra.nome, obraId:obra.id, observacao:obs});
-    });
-  });
-
-  /* --- Remessa recente que puxou vários itens abaixo do mínimo --- */
-  const saidasBaixa = [
-    [3,0,[['MAT-036',12],['MAT-039',20],['MAT-037',16]],'Renovação de EPI de toda a equipe.'],
-    [3,1,[['MAT-024',10],['MAT-022',10]],'Infra elétrica do 3º pavimento.'],
-    [2,0,[['MAT-020',3],['MAT-021',16]],'Instalação do reservatório superior.'],
-    [2,1,[['MAT-042',15],['MAT-041',12]],'Impermeabilização das áreas molhadas.'],
-    [1,0,[['MAT-013',24],['MAT-032',22]],'Fôrmas e armação da laje de cobertura.']
-  ];
-  saidasBaixa.forEach(e=>{
-    const [d,oi,itens,obs]=e, data=daysAgo(d), obra=obras[oi];
-    itens.forEach(i=>{
-      const mat=byCode[i[0]];
-      mkMov({tipo:'saida', data, materialId:mat.id, materialDesc:mat.descricao, unidade:mat.unidade,
-        quantidade:i[1], valorUnitario:mat.custoMedio, valorTotal:Math.round(i[1]*mat.custoMedio*100)/100,
-        fornecedorId:null, nfNumero:'', nfId:null,
-        origem:'Galpão Central', destino:obra.nome, obraId:obra.id, observacao:obs});
-    });
-  });
-
-  /* --- Ajustes de inventário --- */
-  mkMov({tipo:'ajuste', data:daysAgo(20), materialId:byCode['MAT-015'].id, materialDesc:byCode['MAT-015'].descricao,
-    unidade:'KG', quantidade:-3, valorUnitario:byCode['MAT-015'].custoMedio, valorTotal:0,
-    origem:'Inventário', destino:'Galpão Central', obraId:null, observacao:'Divergência de contagem — perda por umidade.'});
-  mkMov({tipo:'ajuste', data:daysAgo(9), materialId:byCode['MAT-019'].id, materialDesc:byCode['MAT-019'].descricao,
-    unidade:'UN', quantidade:12, valorUnitario:byCode['MAT-019'].custoMedio, valorTotal:0,
-    origem:'Inventário', destino:'Galpão Central', obraId:null, observacao:'Peças encontradas em caixa avulsa.'});
-
-  movs.sort((a,b)=> a.data < b.data ? -1 : 1);
-  Adapter.insertMany(COL.MOV, movs);
-
-  // Recalcula custo médio real
-  DB.materiais.all().forEach(m=>Stock.refreshCusto(m.id));
-
-  Adapter.meta('seeded', true);
-}
 </script>
 <script>
 /* --------------------------------------------------------------------------
@@ -1666,8 +1452,6 @@ const App = {
     if(pill){ pill.textContent=al; pill.classList.toggle('hide', al===0); }
     const su=$('#sbUser'); if(su) su.textContent = cfg.usuario||'Responsável';
     const tu=$('#tbUser'); if(tu) tu.textContent = cfg.usuario||'Gestão de Estoque';
-    const sv=$('#sbVersion');
-    if(sv && !MODO_REMOTO) sv.textContent = (cfg.cargo||'')+' · Protótipo v1.1';
   }
 };
 
@@ -1687,6 +1471,15 @@ function selectOpts(list, valKey, labKey, selected, placeholder){
   list.forEach(o=>{ h += '<option value="'+esc(o[valKey])+'"'+(String(o[valKey])===String(selected)?' selected':'')+'>'+esc(o[labKey])+'</option>'; });
   return h;
 }
+/* Miniatura do material nas listagens. Devolve string vazia quando o modulo
+   de fotos nao carregou, para a lista nao ganhar molduras vazias a toa. */
+function miniFoto(m){
+  if(!window.Fotos) return '';
+  if(!m || !m.fotoUrl) return '<div class="mat-foto-vazia"><i class="fa-solid fa-cube"></i></div>';
+  return '<img class="mat-foto" src="'+esc(m.fotoUrl)+'" alt="" loading="lazy" '+
+         'onerror="this.className=\'mat-foto-vazia\';this.removeAttribute(\'src\')">';
+}
+
 function obraBadge(status){
   const m = {andamento:['b-green','Em andamento'], planejada:['b-blue','Planejada'], concluida:['b-gray','Concluída'], pausada:['b-amber','Pausada']};
   const [c,t]=m[status]||['b-gray',status||'—'];
@@ -2895,7 +2688,7 @@ function renderMats(){
   let cards='<div class="list as-table">';
   rows.forEach(m=>{
     cards += '<div class="item" onclick="Forms.editarMaterial(\''+m.id+'\')">'+
-      '<div class="item-top"><div style="flex:1;min-width:0">'+
+      '<div class="item-top">'+miniFoto(m)+'<div style="flex:1;min-width:0">'+
       '<div class="item-code">'+esc(m.codigo)+' · '+esc(m.categoria)+'</div>'+
       '<div class="item-title">'+esc(m.descricao)+'</div></div>'+
       (m.ativo===false?'<span class="badge b-gray">Inativo</span>':'<span class="badge b-green">Ativo</span>')+'</div>'+
@@ -2912,7 +2705,9 @@ function renderMats(){
     '<th class="num">Saldo</th><th class="num">Mín.</th><th class="num">Ideal</th><th class="num">Custo médio</th><th>EAN</th><th>Fornecedor</th><th>Situação</th></tr></thead><tbody>';
   rows.forEach(m=>{
     tb += '<tr onclick="Forms.editarMaterial(\''+m.id+'\')">'+
-      '<td class="tsub tabular">'+esc(m.codigo)+'</td><td class="tm">'+esc(m.descricao)+'</td>'+
+      '<td class="tsub tabular">'+esc(m.codigo)+'</td>'+
+      '<td class="tm"><div style="display:flex;align-items:center;gap:10px;min-width:0">'+
+        miniFoto(m)+'<span style="min-width:0">'+esc(m.descricao)+'</span></div></td>'+
       '<td><span class="badge b-gray">'+esc(m.categoria)+'</span></td><td class="tsub">'+esc(m.unidade)+'</td>'+
       '<td class="num" style="font-weight:700">'+qty(saldos[m.id]||0)+'</td>'+
       '<td class="num tsub">'+qty(m.estoqueMinimo)+'</td><td class="num tsub">'+qty(m.estoqueIdeal)+'</td>'+
@@ -2952,6 +2747,22 @@ Forms.editarMaterial = function(id){
   '</div>'+
   '<div class="field"><label>Fornecedor principal</label><select class="input" id="mtForn">'+
     selectOpts(forns,'id','fantasia',m.fornecedorId,'Nenhum')+'</select></div>'+
+  (window.Fotos ?
+  '<div class="form-sec">Foto</div>'+
+  '<div class="foto-campo">'+
+    '<div class="foto-prev" id="mtFotoPrev">'+
+      (m.fotoUrl ? '<img src="'+esc(m.fotoUrl)+'" alt="Foto do material">'
+                 : '<i class="fa-solid fa-camera"></i>')+
+    '</div>'+
+    '<div class="foto-acoes">'+
+      '<input type="file" id="mtFotoArq" accept="image/*" capture="environment" hidden>'+
+      '<button type="button" class="btn btn-outline btn-sm" id="mtFotoBtn">'+
+        '<i class="fa-solid fa-camera"></i> '+(m.fotoUrl?'Trocar foto':'Adicionar foto')+'</button>'+
+      '<button type="button" class="btn btn-red btn-sm" id="mtFotoDel"'+
+        (m.fotoUrl?'':' style="display:none"')+'><i class="fa-solid fa-trash"></i> Remover</button>'+
+      '<div class="foto-msg" id="mtFotoMsg">Opcional. A imagem é reduzida antes de enviar.</div>'+
+    '</div>'+
+  '</div>' : '')+
   '<label class="switch"><input type="checkbox" id="mtAtivo"'+(m.ativo!==false?' checked':'')+'><span class="track"></span>'+
     '<span style="font-size:13.5px;font-weight:600">Material ativo</span></label>';
 
@@ -2960,6 +2771,55 @@ Forms.editarMaterial = function(id){
     footer:(id?'<button class="btn btn-red" id="mtDel"><i class="fa-solid fa-trash"></i></button>':'')+
            '<button class="btn btn-outline" data-close>Cancelar</button><button class="btn btn-primary" id="mtSalvar"><i class="fa-solid fa-check"></i> Salvar</button>',
     onMount:ov=>{
+      /* ---------------------------------------------------------------
+         Foto do material.
+         A imagem sobe assim que é escolhida, não no Salvar: assim o
+         usuário vê na hora se deu certo, e o Salvar não fica travado
+         esperando upload em rede de obra. fotoUrl guarda o resultado. */
+      let fotoUrl = m.fotoUrl || null;
+      let fotoApagar = null;          // endereço antigo, apagado só ao salvar
+      const fArq=$('#mtFotoArq',ov), fBtn=$('#mtFotoBtn',ov),
+            fDel=$('#mtFotoDel',ov), fPrev=$('#mtFotoPrev',ov), fMsg=$('#mtFotoMsg',ov);
+
+      if(fArq){
+        fBtn.addEventListener('click',()=>fArq.click());
+
+        fArq.addEventListener('change',async()=>{
+          const arq=fArq.files && fArq.files[0];
+          if(!arq) return;
+          const antes=fBtn.innerHTML;
+          fBtn.disabled=true; fDel.disabled=true;
+          fBtn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+          fMsg.textContent='Reduzindo e enviando a imagem...';
+          try{
+            const chave = id || (m.__fotoChave = m.__fotoChave || Fotos.novaChave());
+            const empresa = window.ObraStockEmpresaId || 'demo';
+            const url = await Fotos.enviar(arq, empresa, chave);
+            if(fotoUrl && fotoUrl!==url) fotoApagar = fotoUrl;
+            fotoUrl = url;
+            fPrev.innerHTML='<img src="'+esc(url)+'" alt="Foto do material">';
+            fDel.style.display=''; fDel.disabled=false;
+            fBtn.innerHTML='<i class="fa-solid fa-camera"></i> Trocar foto';
+            fMsg.textContent='Foto pronta. Ela só será gravada quando você salvar.';
+          }catch(e){
+            fBtn.innerHTML=antes;
+            fMsg.textContent='';
+            Toast.err('Não foi possível enviar a foto', e.message||'Tente outra imagem.');
+          }finally{
+            fBtn.disabled=false; fArq.value='';
+          }
+        });
+
+        fDel.addEventListener('click',()=>{
+          if(fotoUrl) fotoApagar = fotoUrl;
+          fotoUrl=null;
+          fPrev.innerHTML='<i class="fa-solid fa-camera"></i>';
+          fDel.style.display='none';
+          fBtn.innerHTML='<i class="fa-solid fa-camera"></i> Adicionar foto';
+          fMsg.textContent='A foto será removida quando você salvar.';
+        });
+      }
+
       $('#mtSalvar',ov).addEventListener('click',()=>{
         const desc=$('#mtDesc',ov).value.trim(), cod=$('#mtCod',ov).value.trim();
         if(!desc){ Toast.err('Informe a descrição'); return; }
@@ -2971,7 +2831,11 @@ Forms.editarMaterial = function(id){
           custoMedio:numRaw($('#mtCusto',ov).value), ean:$('#mtEan',ov).value.trim(),
           codFornecedor:$('#mtCodF',ov).value.trim(), fornecedorId:$('#mtForn',ov).value||null,
           ativo:$('#mtAtivo',ov).checked};
+        if(window.Fotos) d.fotoUrl = fotoUrl;
         if(id) DB.materiais.upd(id,d); else DB.materiais.add(d);
+        /* Só agora o arquivo antigo some: se o usuário desistisse no meio,
+           teríamos apagado uma foto que continua valendo no banco. */
+        if(fotoApagar && window.Fotos) Fotos.removerPorUrl(fotoApagar);
         Modal.close(); Toast.ok(id?'Material atualizado.':'Material cadastrado.'); App.render();
       });
       const del=$('#mtDel',ov);
@@ -2979,7 +2843,7 @@ Forms.editarMaterial = function(id){
         const usado = DB.movimentacoes.all().some(x=>x.materialId===id);
         Modal.close();
         if(usado){ Toast.err('Não é possível excluir','Existem movimentações com este material. Marque-o como inativo.'); return; }
-        Modal.confirm('Excluir material?','Esta ação não pode ser desfeita.',()=>{ DB.materiais.del(id); Toast.ok('Material excluído.'); App.render(); },{danger:true,yes:'Excluir'});
+        Modal.confirm('Excluir material?','Esta ação não pode ser desfeita.',()=>{ DB.materiais.del(id); if(m.fotoUrl && window.Fotos) Fotos.removerPorUrl(m.fotoUrl); Toast.ok('Material excluído.'); App.render(); },{danger:true,yes:'Excluir'});
       });
     }
   });
@@ -3942,8 +3806,6 @@ Views.config = function(){
   const c = DB.config.get();
   const stats = {mat:DB.materiais.all().length, obra:DB.obras.all().length, forn:DB.fornecedores.all().length,
                  mov:DB.movimentacoes.all().length, nf:DB.notas.all().length};
-  let used = 0;
-  try{ Object.keys(localStorage).forEach(k=>{ if(k.indexOf('obrastock:')===0) used += (localStorage.getItem(k)||'').length; }); }catch(e){}
 
   let h = pageHead('fa-gear','Configurações','Dados da empresa, preferências e manutenção');
 
@@ -3973,17 +3835,15 @@ Views.config = function(){
     '<div class="kv-list">'+
       kv('Materiais', stats.mat)+ kv('Obras', stats.obra)+ kv('Fornecedores', stats.forn)+
       kv('Movimentações', stats.mov)+ kv('Notas fiscais', stats.nf)+
-      kv('Espaço utilizado', (used/1024).toFixed(1)+' KB')+
-      kv('Armazenamento', Adapter.ok?'<span class="badge b-green">localStorage ativo</span>':'<span class="badge b-amber">memória (sessão)</span>')+
+      kv('Onde ficam', '<span class="badge b-green"><i class="fa-solid fa-cloud"></i> Supabase</span>')+
+      kv('Cópia de segurança', '<span class="badge b-green">diária, automática</span>')+
     '</div>'+
     '<div class="divider"></div>'+
     '<div class="stack">'+
-      '<button class="btn btn-outline btn-block" id="cfExport"><i class="fa-solid fa-download"></i> Exportar backup (JSON)</button>'+
-      '<button class="btn btn-outline btn-block" id="cfImport"><i class="fa-solid fa-upload"></i> Restaurar backup</button>'+
-      '<input type="file" id="cfFile" accept=".json,application/json" style="display:none">'+
-      '<button class="btn btn-outline btn-block" id="cfSeed"><i class="fa-solid fa-wand-magic-sparkles"></i> Recarregar dados de demonstração</button>'+
-      '<button class="btn btn-red btn-block" id="cfWipe"><i class="fa-solid fa-trash"></i> Apagar todos os dados</button>'+
+      '<button class="btn btn-outline btn-block" id="cfExport"><i class="fa-solid fa-download"></i> Baixar cópia dos dados (JSON)</button>'+
     '</div>'+
+    '<p class="hint" style="margin-top:10px">A cópia serve para conferência e para levar os dados embora quando quiser. '+
+      'Restaurar backup é operação feita no servidor — fale com o suporte.</p>'+
   '</div></div>';
 
   h += '</div>';
@@ -4001,16 +3861,15 @@ Views.config = function(){
     '</div></div>'+
   '</div></div>';
 
-  h += '<div class="card" style="margin-top:16px"><div class="card-head"><h3><i class="fa-solid fa-plug-circle-bolt"></i>Integração futura</h3></div><div class="card-pad">'+
+  h += '<div class="card" style="margin-top:16px"><div class="card-head"><h3><i class="fa-solid fa-database"></i>Banco de dados</h3></div><div class="card-pad">'+
     '<div class="alert a-blue"><i class="fa-solid fa-circle-info"></i><div>'+
-      'Este protótipo grava tudo no <b>localStorage</b> do navegador através de uma camada de abstração (<code>LocalStorageAdapter</code>). '+
-      'Para migrar ao <b>Supabase</b>, basta implementar um <code>SupabaseAdapter</code> com os mesmos métodos '+
-      '(<code>list, get, insert, update, remove</code>) e trocar uma única linha no código — toda a interface continua funcionando sem alterações.'+
+      'Tudo o que você registra vai para o <b>Supabase</b> no mesmo instante. Nada fica guardado só neste aparelho: '+
+      'você pode lançar a entrada no computador do escritório e conferir o saldo pelo celular na obra, que o número é o mesmo.'+
     '</div></div>'+
-    '<div class="form-sec">Coleções mapeadas</div>'+
-    '<div class="scroll-x"><table style="min-width:420px"><thead><tr><th>Coleção local</th><th>Tabela Supabase sugerida</th><th class="num">Registros</th></tr></thead><tbody>'+
+    '<div class="form-sec">Registros por tabela</div>'+
+    '<div class="scroll-x"><table style="min-width:360px"><thead><tr><th>Tabela</th><th class="num">Registros</th></tr></thead><tbody>'+
       ['materiais','obras','fornecedores','movimentacoes','notas','categorias'].map(k=>
-        '<tr style="cursor:default"><td class="tm"><code>obrastock:'+k+'</code></td><td class="tsub"><code>public.'+k+'</code></td>'+
+        '<tr style="cursor:default"><td class="tm"><code>'+k+'</code></td>'+
         '<td class="num">'+Adapter.list(k).length+'</td></tr>').join('')+
     '</tbody></table></div>'+
   '</div></div>';
@@ -4032,30 +3891,6 @@ Views.config_init = function(){
     download('obrastock_backup_'+todayISO()+'.json', JSON.stringify(DB.exportAll(),null,2),'application/json');
     Toast.ok('Backup exportado.');
   });
-  $('#cfImport').addEventListener('click',()=>$('#cfFile').click());
-  $('#cfFile').addEventListener('change',function(){
-    const f=this.files[0]; if(!f) return;
-    const r=new FileReader();
-    r.onload=()=>{
-      try{
-        const d=JSON.parse(r.result);
-        if(!d.materiais && !d.movimentacoes) throw new Error('Formato inválido');
-        Modal.confirm('Restaurar backup?','Todos os dados atuais serão <b>substituídos</b> pelo conteúdo do arquivo.',
-          ()=>{ DB.importAll(d); Adapter.meta('seeded',true); Toast.ok('Backup restaurado.'); App.go('dashboard'); },
-          {danger:true, yes:'Restaurar'});
-      }catch(e){ Toast.err('Arquivo inválido', e.message); }
-    };
-    r.readAsText(f); this.value='';
-  });
-  $('#cfSeed').addEventListener('click',()=>{
-    Modal.confirm('Recarregar demonstração?','Todos os dados atuais serão <b>apagados</b> e substituídos pelos dados de exemplo.',
-      ()=>{ DB.wipe(); seed(); Toast.ok('Dados de demonstração recarregados.'); App.go('dashboard'); },{danger:true, yes:'Recarregar'});
-  });
-  $('#cfWipe').addEventListener('click',()=>{
-    Modal.confirm('Apagar todos os dados?','Esta ação é <b>irreversível</b>. Recomendamos exportar um backup antes.',
-      ()=>{ DB.wipe(); DB.config.set(DEFAULT_CFG); CATEGORIAS_PADRAO.forEach(c=>DB.categorias.add({nome:c}));
-            Adapter.meta('seeded',true); Toast.ok('Dados apagados.'); App.go('dashboard'); },{danger:true, yes:'Apagar tudo'});
-  });
 };
 
 /* ==========================================================================
@@ -4065,7 +3900,7 @@ Views.config_init = function(){
 const G = () => window.ObraStockGestao || null;
 function ehDevUI(){ const g=G(); return !!(g && g.ehDev()); }
 
-/* Fallback: sem Supabase (protótipo/localStorage) usamos o contrato padrão. */
+/* Enquanto o contrato não chega do banco, mostramos o padrão combinado. */
 const CONTRATO_PADRAO = {
   valor_mensal: 350, dia_vencimento: 10, status: 'ativo',
   inicio: null, valor_implantacao: 4000,
@@ -4570,8 +4405,6 @@ window.Stock = Stock; window.Mov = Mov; window.DB = DB; window.Tema = Tema;
 window.Stories = Stories;
 
 (function init(){
-  if(!MODO_REMOTO){ try{ seed(); }catch(e){ console.error('Erro no seed:',e); } }
-
   $$('.sb[data-nav], .bn[data-nav]').forEach(b=>b.addEventListener('click',()=>App.go(b.dataset.nav)));
   $('#bnFab').addEventListener('click', menuRegistrar);
   $('#bnMore').addEventListener('click', menuMais);
