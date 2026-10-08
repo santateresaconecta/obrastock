@@ -93,6 +93,18 @@ const CONSTRAINTS = {
   categorias_empresa_id_nome_key:  'Esta categoria já existe.'
 };
 
+/* Nome tecnico da coluna -> nome que o usuario ve na tela. */
+const ROTULOS = {
+  nome: 'Nome', codigo: 'Codigo', descricao: 'Descricao', categoria: 'Categoria',
+  unidade: 'Unidade', quantidade: 'Quantidade', material_desc: 'Material',
+  razao_social: 'Razao social', numero: 'Numero', tipo: 'Tipo', data: 'Data',
+  status: 'Status', empresa_id: 'Empresa', material_id: 'Material',
+  obra_id: 'Obra', fornecedor_id: 'Fornecedor', nota_id: 'Nota fiscal'
+};
+function nomeAmigavel(col){
+  return ROTULOS[col] || col.replace(/_id$/, '').replace(/_/g, ' ');
+}
+
 export function traduzErro(erro){
   if (!erro) return 'Ocorreu um erro inesperado.';
   const bruto = erro.message || String(erro);
@@ -109,6 +121,25 @@ export function traduzErro(erro){
     return 'Seu perfil não tem permissão para esta ação.';
   if (codigo === '23503')
     return 'Este registro está sendo usado em outro lugar e não pode ser removido.';
+
+  /* Erros de formato e de campo obrigatório. Sem estes, qualquer um deles caía
+     no "Não foi possível concluir. Tente novamente." do final — que não diz ao
+     usuário o que fazer nem me ajuda a achar o defeito. O nome da coluna vem
+     na mensagem do Postgres; aproveitamos para apontar o campo. */
+  if (codigo === '22007' || codigo === '22008' || /invalid input syntax for type date/i.test(bruto))
+    return 'Há uma data em formato inválido. Confira os campos de data.';
+  if (codigo === '22P02' || /invalid input syntax for type (uuid|numeric|integer)/i.test(bruto))
+    return 'Há um campo numérico ou uma seleção com valor inválido.';
+  if (codigo === '23502' || /violates not-null constraint/i.test(bruto)){
+    const m = bruto.match(/column "([^"]+)"/);
+    return m ? 'O campo "' + nomeAmigavel(m[1]) + '" é obrigatório.'
+             : 'Um campo obrigatório ficou em branco.';
+  }
+  if (codigo === 'PGRST204'){
+    const m = bruto.match(/'([^']+)' column/);
+    return 'O sistema tentou gravar um campo que não existe no banco' +
+           (m ? ' ("' + m[1] + '")' : '') + '. Avise o suporte.';
+  }
 
   for (const chave in MAPA_ERROS){
     if (bruto.includes(chave)) return MAPA_ERROS[chave];

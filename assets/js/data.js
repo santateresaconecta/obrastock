@@ -48,11 +48,41 @@ function linhaParaUI(row){
   for (const k in row) out[APELIDO_UI[k] || paraCamel(k)] = row[k];
   return out;
 }
+/* -----------------------------------------------------------------------------
+   CAMPO EM BRANCO EM COLUNA QUE NAO E TEXTO
+   Um <input> vazio devolve string vazia, nunca null. Para uma coluna de texto
+   isso e inofensivo, mas o Postgres recusa '' em data, numero, uuid e enum:
+   invalid input syntax for type date: "" -> o PostgREST devolve HTTP 400 e a
+   gravacao inteira se perde. Foi o que impediu de cadastrar uma obra sem
+   preencher a data de inicio.
+   Lista levantada do proprio schema.sql (information_schema), nao de memoria. */
+const NAO_TEXTO = new Set([
+  'atualizado_em', 'aviso_baixo_pct', 'aviso_critico_pct', 'criado_em',
+  'criado_por', 'custo_medio', 'data', 'emissao', 'empresa_id',
+  'estoque_ideal', 'estoque_minimo', 'estornada_em', 'estornada_por',
+  'fornecedor_id', 'id', 'inicio', 'material_id', 'nota_id', 'obra_id',
+  'papel', 'quantidade', 'status', 'tipo', 'valor_total', 'valor_unitario'
+]);
+
+/* Dessas, as que sao NOT NULL mas tem valor padrao no banco. Mandar null
+   violaria a restricao; o certo e omitir a coluna e deixar o padrao valer. */
+const USAR_PADRAO = new Set([
+  'atualizado_em', 'aviso_baixo_pct', 'aviso_critico_pct', 'criado_em',
+  'custo_medio', 'data', 'estoque_ideal', 'estoque_minimo', 'id',
+  'papel', 'status', 'valor_total', 'valor_unitario'
+]);
+
 function linhaParaBanco(obj){
   const out = {};
   for (const k in obj){
     if (obj[k] === undefined) continue;
-    out[APELIDO_DB[k] || paraSnake(k)] = obj[k];
+    const col = APELIDO_DB[k] || paraSnake(k);
+    let v = obj[k];
+    if (typeof v === 'string' && v.trim() === '' && NAO_TEXTO.has(col)){
+      if (USAR_PADRAO.has(col)) continue;   // o banco preenche sozinho
+      v = null;                             // coluna opcional: limpa de verdade
+    }
+    out[col] = v;
   }
   return out;
 }
@@ -345,7 +375,7 @@ export class SupabaseAdapter {
 }
 
 /* =============================================================================
-   INICIALIZAÇÃO IMPORTANTE
+   INICIALIZAÇÃO
 ============================================================================= */
 export async function iniciarDados(){
   const p = perfil();

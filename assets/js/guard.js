@@ -19,28 +19,33 @@ import { exigirSessao, observarSessao, liberarTela, perfil, sair,
          atualizarPerfil } from './auth.js';
 
 /* --------------------------------------------------------------------------
-   MODO PROTÓTIPO — sem credenciais, sem backend
+   SEM CREDENCIAIS
+   Antes isto abria um "modo protótipo": o sistema funcionava, gravando no
+   localStorage do navegador. Em produção isso é pior do que não abrir — o
+   usuário registraria a saída de material, veria tudo certo na tela, e o
+   dado morreria naquele aparelho.
+   Agora a tela fica bloqueada com um aviso dirigido a quem instala.
 -------------------------------------------------------------------------- */
-function faixaPrototipo(){
-  const f = document.createElement('div');
-  f.setAttribute('role', 'status');
-  const escuro = document.documentElement.dataset.theme === 'dark';
-  f.style.cssText =
-    'position:fixed;left:0;right:0;bottom:0;z-index:9998;' +
-    (escuro ? 'background:#332611;color:#f0c67a;border-top:1px solid #4a3818;'
-            : 'background:#fdf2e0;color:#7a4a05;border-top:1px solid #f6ddb0;') +
-    'font:600 12.5px/1.35 Inter,system-ui,sans-serif;padding:9px 14px;' +
-    'display:flex;gap:9px;align-items:center;justify-content:center;text-align:center';
-  f.innerHTML =
-    '<i class="fa-solid fa-triangle-exclamation"></i>' +
-    '<span>Modo protótipo — dados somente neste navegador. ' +
-    'Preencha <b>assets/js/config.js</b> para ativar login e banco de dados.</span>';
-  document.body.appendChild(f);
-
-  // não deixa a faixa cobrir a navegação inferior no celular
-  const alt = f.offsetHeight || 36;
-  document.body.style.paddingBottom =
-    'calc(' + (getComputedStyle(document.body).paddingBottom || '0px') + ' + ' + alt + 'px)';
+function telaSemConfiguracao(){
+  const d = document.createElement('div');
+  /* O guard mantem o <html> com visibility:hidden ate os dados chegarem, e
+     visibility e herdada. Sem reverter aqui, este aviso ficaria invisivel e
+     o usuario veria uma tela branca sem explicacao nenhuma. */
+  d.style.cssText =
+    'position:fixed;inset:0;z-index:10000;background:#0f2742;color:#fff;' +
+    'visibility:visible;' +
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'gap:14px;padding:28px;text-align:center;font:400 14px Inter,system-ui,sans-serif';
+  d.innerHTML =
+    '<i class="fa-solid fa-plug-circle-xmark" style="font-size:34px;opacity:.5"></i>' +
+    '<b style="font-size:17px">Sistema não configurado</b>' +
+    '<span style="max-width:400px;line-height:1.5;opacity:.85">' +
+    'A ligação com o banco de dados não foi preenchida nesta instalação. ' +
+    'Nenhum dado pode ser gravado até que isso seja corrigido.</span>' +
+    '<span style="max-width:400px;line-height:1.5;opacity:.6;font-size:12.5px">' +
+    'Para quem administra: preencha SUPABASE_URL e SUPABASE_ANON em ' +
+    'assets/js/config.js e publique novamente.</span>';
+  document.body.appendChild(d);
 }
 
 /* --------------------------------------------------------------------------
@@ -163,24 +168,43 @@ function confirmarSaida(){
 /* --------------------------------------------------------------------------
    INÍCIO
 -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+   LIMPEZA DA VERSÃO ANTERIOR
+   Quem já usou o sistema antes tem materiais, obras e movimentações velhas
+   guardadas no navegador. Não são mais lidas por nada, mas ficariam lá
+   ocupando espaço e, pior, apareceriam para quem abrisse o armazenamento do
+   navegador achando que ainda valem. Sai uma vez e nunca mais.
+   O tema, as dicas e a sessão NÃO entram nesta lista: são preferências.
+-------------------------------------------------------------------------- */
+function limparDadosAntigos(){
+  const velhas = ['materiais','obras','fornecedores','movimentacoes','notas',
+                  'categorias','config','modo'];
+  try {
+    Object.keys(localStorage).forEach(k => {
+      if (!k.startsWith('obrastock:')) return;
+      const resto = k.slice('obrastock:'.length);
+      if (velhas.includes(resto) || resto.startsWith('_meta:'))
+        localStorage.removeItem(k);
+    });
+  } catch (e) { /* navegador sem armazenamento: nada a limpar */ }
+}
+
 (async function iniciar(){
+  limparDadosAntigos();
+
   /* Avisa a rede de segurança do index.html que o guard assumiu.
      Sem isto ela mostraria o aviso de falha por cima de um app saudável. */
   window.__obrastockGuardOk = true;
 
   if (!CONFIGURADO){
-    liberarTela();
     if (document.readyState === 'loading')
-      document.addEventListener('DOMContentLoaded', faixaPrototipo);
-    else faixaPrototipo();
-    return;
+      document.addEventListener('DOMContentLoaded', telaSemConfiguracao);
+    else telaSemConfiguracao();
+    return;              // a tela NAO e liberada: nada de app sem banco
   }
 
   const p = await exigirSessao();
   if (!p) return;          // exigirSessao já redirecionou; a tela segue oculta
-
-  // A partir daqui os dados vêm do banco, não do navegador.
-  try { localStorage.setItem('obrastock:modo', 'remoto'); } catch (e) {}
 
   try {
     const { iniciarDados, protegerSaida } = await import('./data.js');
@@ -207,6 +231,18 @@ function confirmarSaida(){
     instalarPonte();
   }catch(e){
     console.warn('[guard] gestão indisponível:', e.message);
+  }
+
+  /* Foto do material. Os <script> do index.html não são módulos, então o
+     módulo é pendurado em window — mesma ponte usada por DB e Gestao.
+     Se falhar, o cadastro de material continua funcionando sem foto: o
+     formulário checa window.Fotos antes de mostrar o campo. */
+  try{
+    const fotos = await import('./fotos.js');
+    window.Fotos = fotos;
+    window.ObraStockEmpresaId = (p && p.empresa_id) || null;
+  }catch(e){
+    console.warn('[guard] fotos indisponíveis:', e.message);
   }
 
   const pronto = () => {
