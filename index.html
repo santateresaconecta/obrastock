@@ -4250,6 +4250,8 @@ Views.cobranca = function(){
     '<div class="field" style="flex:1;min-width:190px;margin:0"><label>Empresa</label>'+
       '<select class="input" id="cbEmp"><option value="">Todas</option></select></div>'+
     '<button class="btn btn-primary" id="cbGerar"><i class="fa-solid fa-file-invoice-dollar"></i> Gerar mês</button>'+
+    '<button class="btn btn-outline" id="cbContrato"><i class="fa-solid fa-file-contract"></i> Contrato</button>'+
+    '<button class="btn btn-green" id="cbNovo"><i class="fa-solid fa-building-circle-check"></i> Novo cliente</button>'+
     '</div></div><div id="cbLista"></div>';
   return h;
 };
@@ -4260,6 +4262,7 @@ Views.cobranca_init = async function(){
   try{
     const r = await g.Usuarios.empresas();
     const sel=$('#cbEmp');
+    sel.innerHTML='<option value="">Todas</option>';   // nunca empilhar opções
     (r.empresas||[]).forEach(e=>{ const o=document.createElement('option'); o.value=e.id; o.textContent=e.nome; sel.appendChild(o); });
   }catch(e){ Toast.err(e.message); }
 
@@ -4270,8 +4273,154 @@ Views.cobranca_init = async function(){
     try{ await g.Cobranca.gerarMes(emp); Toast.ok('Cobrança gerada.'); carregarCobrancas(); }
     catch(e){ Toast.err(e.message); }
   });
+  $('#cbNovo').addEventListener('click', formNovoCliente);
+  $('#cbContrato').addEventListener('click', ()=>{
+    const emp=$('#cbEmp').value;
+    if(!emp){ Toast.err('Escolha a empresa','Selecione de quem é o contrato que você quer ver.'); return; }
+    formContrato(emp, $('#cbEmp').selectedOptions[0].textContent);
+  });
   carregarCobrancas();
 };
+
+/* ---------------------------------------------------------------------------
+   CLIENTE NOVO
+   Empresa, contrato e (opcionalmente) o primeiro acesso, num lugar só.
+   Antes isso era SQL colado à mão no painel do Supabase, em dois passos —
+   e esquecer o segundo deixava a empresa sem contrato, o que só aparecia
+   semanas depois, na hora de gerar a mensalidade.
+--------------------------------------------------------------------------- */
+function formNovoCliente(){
+  const g=G(); if(!g) return;
+  const hoje = todayISO();
+  const b =
+    '<div class="form-sec">Empresa</div>'+
+    '<div class="field"><label>Razão social <span class="req">*</span></label>'+
+      '<input class="input" id="ncNome" placeholder="Ex.: Construtora Fulano Ltda"></div>'+
+    '<div class="grid2">'+
+      '<div class="field"><label>CNPJ</label><input class="input" id="ncCnpj" inputmode="numeric" placeholder="00.000.000/0001-00"></div>'+
+      '<div class="field"><label>Nome do galpão</label><input class="input" id="ncGalpao" value="Galpão Central"></div>'+
+    '</div>'+
+    '<div class="form-sec">Contrato</div>'+
+    '<div class="grid3">'+
+      '<div class="field"><label>Mensalidade (R$) <span class="req">*</span></label>'+
+        '<input type="number" class="input" id="ncValor" value="350" min="1" step="0.01" inputmode="decimal"></div>'+
+      '<div class="field"><label>Dia do vencimento</label>'+
+        '<input type="number" class="input" id="ncDia" value="10" min="1" max="28" inputmode="numeric"></div>'+
+      '<div class="field"><label>Implantação (R$)</label>'+
+        '<input type="number" class="input" id="ncImpl" value="0" min="0" step="0.01" inputmode="decimal"></div>'+
+    '</div>'+
+    '<div class="field"><label>Início do contrato</label>'+
+      '<input type="date" class="input" id="ncInicio" value="'+hoje+'"></div>'+
+    '<p class="hint">O vencimento vai do dia 1 ao 28 de propósito: dia 29, 30 ou 31 '+
+      'não existe em todo mês e a cobrança cairia em data inválida.</p>'+
+    '<div class="form-sec">Primeiro acesso (opcional)</div>'+
+    '<div class="grid2">'+
+      '<div class="field"><label>Nome do responsável</label><input class="input" id="ncUser" placeholder="Quem vai administrar"></div>'+
+      '<div class="field"><label>E-mail</label><input class="input" id="ncEmail" type="email" inputmode="email" placeholder="nome@empresa.com.br"></div>'+
+    '</div>'+
+    '<p class="hint">Se preencher, o acesso é criado como <b>admin</b> e a pessoa recebe '+
+      'um e-mail para definir a própria senha. Ninguém precisa ditar senha por telefone.</p>';
+
+  Modal.open({
+    title:'Novo cliente', icon:'fa-building-circle-check', wide:true, body:b,
+    footer:'<button class="btn btn-outline" data-close>Cancelar</button>'+
+           '<button class="btn btn-primary" id="ncSalvar"><i class="fa-solid fa-check"></i> Cadastrar</button>',
+    onMount:ov=>{
+      $('#ncSalvar',ov).addEventListener('click', async ()=>{
+        const nome=$('#ncNome',ov).value.trim();
+        if(!nome){ Toast.err('Informe a razão social'); return; }
+        const email=$('#ncEmail',ov).value.trim();
+        const userNome=$('#ncUser',ov).value.trim();
+        if(email && !userNome){ Toast.err('Informe o nome do responsável','Você preencheu o e-mail mas não o nome.'); return; }
+        if(userNome && !email){ Toast.err('Informe o e-mail do responsável','Sem e-mail não dá para criar o acesso.'); return; }
+
+        const bt=$('#ncSalvar',ov);
+        bt.disabled=true; bt.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Cadastrando...';
+        try{
+          const emp = await g.Cobranca.criarCliente({
+            nome, cnpj:$('#ncCnpj',ov).value.trim(), galpao:$('#ncGalpao',ov).value.trim(),
+            valor:$('#ncValor',ov).value, dia:$('#ncDia',ov).value,
+            implantacao:$('#ncImpl',ov).value, inicio:$('#ncInicio',ov).value
+          });
+
+          /* O acesso é um segundo passo que pode falhar sozinho (e-mail já
+             usado, por exemplo). Se falhar, a empresa e o contrato ficam —
+             desfazer tudo obrigaria a redigitar o cadastro inteiro. */
+          let aviso='';
+          if(email){
+            try{
+              await g.Usuarios.criar({ nome:userNome, email, papel:'admin', empresaId:emp.id });
+            }catch(e){
+              aviso=' O acesso não foi criado: '+e.message;
+            }
+          }
+          Modal.close();
+          if(aviso) Toast.err('Cliente cadastrado, mas atenção', aviso);
+          else Toast.ok('Cliente cadastrado.', email?'O responsável recebeu o e-mail de acesso.':'Cadastre o acesso quando quiser.');
+          /* App.render() e nao Views.cobranca_init(): o init adiciona
+             ouvintes de clique e opcoes ao select. Chamado de novo sobre o
+             mesmo HTML, ele duplicava tudo — cada clique em "Contrato"
+             passava a abrir dois modais, e a lista de empresas aparecia em
+             dobro. Redesenhar a tela cria elementos limpos. */
+          App.render();
+        }catch(e){
+          bt.disabled=false; bt.innerHTML='<i class="fa-solid fa-check"></i> Cadastrar';
+          Toast.err('Não foi possível cadastrar', e.message);
+        }
+      });
+    }
+  });
+}
+
+/* ---------------------------------------------------------------------------
+   CONTRATO DE UM CLIENTE
+   Ler e ajustar valor, vencimento e situação sem passar pelo SQL.
+--------------------------------------------------------------------------- */
+async function formContrato(empresaId, nomeEmpresa){
+  const g=G(); if(!g) return;
+  let c=null;
+  try{ c = await g.Cobranca.contrato(empresaId); }
+  catch(e){ Toast.err('Não foi possível ler o contrato', e.message); return; }
+
+  const op=(v,t,atual)=>'<option value="'+v+'"'+(atual===v?' selected':'')+'>'+t+'</option>';
+  const b =
+    '<p class="hint" style="margin-top:0">Cliente: <b>'+esc(nomeEmpresa||'')+'</b></p>'+
+    (c?'':'<div class="alert a-amber"><i class="fa-solid fa-triangle-exclamation"></i><div>'+
+         'Esta empresa está <b>sem contrato</b>. Enquanto ficar assim, a geração da '+
+         'mensalidade vai recusar. Preencha abaixo para resolver.</div></div>')+
+    '<div class="grid3">'+
+      '<div class="field"><label>Mensalidade (R$)</label>'+
+        '<input type="number" class="input" id="ctValor" value="'+(c?numRaw(c.valor_mensal):350)+'" min="1" step="0.01" inputmode="decimal"></div>'+
+      '<div class="field"><label>Dia do vencimento</label>'+
+        '<input type="number" class="input" id="ctDia" value="'+(c?c.dia_vencimento:10)+'" min="1" max="28" inputmode="numeric"></div>'+
+      '<div class="field"><label>Situação</label><select class="input" id="ctStatus">'+
+        op('ativo','Ativo',c&&c.status)+op('suspenso','Suspenso',c&&c.status)+
+        op('encerrado','Encerrado',c&&c.status)+'</select></div>'+
+    '</div>'+
+    '<div class="field"><label>Observação</label><textarea class="input" id="ctObs">'+esc((c&&c.observacao)||'')+'</textarea></div>';
+
+  Modal.open({
+    title:'Contrato', icon:'fa-file-contract', body:b,
+    footer:'<button class="btn btn-outline" data-close>Cancelar</button>'+
+           '<button class="btn btn-primary" id="ctSalvar"><i class="fa-solid fa-check"></i> Salvar</button>',
+    onMount:ov=>{
+      $('#ctSalvar',ov).addEventListener('click', async ()=>{
+        const dia=Number($('#ctDia',ov).value);
+        if(!(dia>=1 && dia<=28)){ Toast.err('Dia de vencimento inválido','Use um dia entre 1 e 28.'); return; }
+        const valor=numRaw($('#ctValor',ov).value);
+        if(!(valor>0)){ Toast.err('Valor inválido','A mensalidade precisa ser maior que zero.'); return; }
+        try{
+          await g.Cobranca.salvarContrato(empresaId, {
+            valor_mensal:valor, dia_vencimento:dia,
+            status:$('#ctStatus',ov).value,
+            observacao:$('#ctObs',ov).value.trim()||null
+          });
+          Modal.close(); Toast.ok('Contrato salvo.');
+        }catch(e){ Toast.err('Não foi possível salvar', e.message); }
+      });
+    }
+  });
+}
 
 async function carregarCobrancas(){
   const alvo=$('#cbLista'); if(!alvo) return;
