@@ -59,6 +59,27 @@ export const Usuarios = {
 ----------------------------------------------------------------------------- */
 export const Cobranca = {
 
+  /* Entrada de cliente novo: empresa + contrato de uma vez.
+     Vai por RPC porque a tabela `empresas` não aceita INSERT pelo navegador
+     (nem do desenvolvedor) — empresa é a raiz do isolamento entre clientes,
+     e criar isso daqui seria abrir a porta errada. A função no banco confere
+     quem está pedindo e grava as duas coisas na mesma transação. */
+  async criarCliente(d){
+    const sb = await getClient();
+    const { data, error } = await sb.rpc('fn_criar_cliente', {
+      p_nome:        d.nome,
+      p_cnpj:        d.cnpj || null,
+      p_galpao:      d.galpao || 'Galpão Central',
+      p_valor:       Number(d.valor) || 350,
+      p_dia:         Number(d.dia) || 10,
+      p_implantacao: Number(d.implantacao) || 0,
+      p_inicio:      d.inicio || null,
+      p_observacao:  d.observacao || null
+    });
+    if (error) throw new Error(traduzErro(error));
+    return data;
+  },
+
   async contrato(empresaId){
     const sb = await getClient();
     let q = sb.from('contratos').select('*');

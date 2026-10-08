@@ -80,7 +80,11 @@ const REGRAS = {
   P0003: 'Esta movimentação deixaria o estoque negativo. Estorne antes as saídas posteriores deste material.',
   P0004: 'Estorne primeiro a devolução desta obra.',
   P0005: 'Esta alteração é exclusiva do desenvolvedor do sistema.',
-  P0006: 'Esta empresa ainda não tem contrato ativo.'
+  P0006: 'Esta empresa ainda não tem contrato ativo.',
+  /* P0007 é usado pelo cadastro de cliente novo (CNPJ repetido, dia de
+     vencimento fora da faixa, valor zerado). A própria função já devolve a
+     frase pronta e específica; traduzir de novo só pioraria. */
+  P0007: bruto => bruto
 };
 
 /* Violações de integridade — o nome da constraint diz o que aconteceu. */
