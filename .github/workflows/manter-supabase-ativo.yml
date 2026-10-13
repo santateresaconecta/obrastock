@@ -1,0 +1,73 @@
+# =============================================================================
+# ObraStock — impede a pausa automática do Supabase no plano Free
+# =============================================================================
+# O plano Free pausa o projeto após 7 dias sem atividade no banco. Despausar é
+# manual e leva cerca de 30 segundos — se acontecer numa segunda-feira de
+# manhã, o pessoal da obra encontra o sistema fora do ar.
+#
+# Este agendamento roda a cada 3 dias. Mesmo que uma execução falhe ou o
+# GitHub atrase a fila (é comum em horário de pico), ainda sobram 4 dias de
+# folga antes do limite.
+#
+# CONFIGURAR ANTES DE USAR
+#   No repositório: Settings > Secrets and variables > Actions > New secret
+#     SUPABASE_URL   -> https://xxxxx.supabase.co
+#     SUPABASE_ANON  -> a chave anon (pública, a mesma do config.js)
+# =============================================================================
+
+name: Manter Supabase ativo
+
+on:
+  schedule:
+    - cron: '17 9 */3 * *'    # a cada 3 dias, 09:17 UTC (06:17 em Brasília)
+  workflow_dispatch:           # permite rodar na mão pelo botão "Run workflow"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Chamar o banco
+        env:
+          URL:  ${{ secrets.SUPABASE_URL }}
+          ANON: ${{ secrets.SUPABASE_ANON }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${URL:-}" ] || [ -z "${ANON:-}" ]; then
+            echo "::error::Faltam os secrets SUPABASE_URL e SUPABASE_ANON."
+            exit 1
+          fi
+
+          # Até 3 tentativas: uma instabilidade momentânea não deve
+          # fazer o sinal de vida do dia ser perdido.
+          for tentativa in 1 2 3; do
+            echo "Tentativa $tentativa..."
+
+            codigo=$(curl -s -o /tmp/resposta.txt -w '%{http_code}' \
+              -X POST "${URL}/rest/v1/rpc/fn_ping" \
+              -H "apikey: ${ANON}" \
+              -H "Authorization: Bearer ${ANON}" \
+              -H "Content-Type: application/json" \
+              --max-time 30 \
+              -d '{}') || codigo=000
+
+            echo "HTTP $codigo — $(cat /tmp/resposta.txt)"
+
+            if [ "$codigo" = "200" ]; then
+              echo "::notice::Banco respondeu. Relógio de inatividade zerado."
+              exit 0
+            fi
+
+            # 404 significa que a função não existe: tentar de novo não resolve.
+            if [ "$codigo" = "404" ]; then
+              echo "::error::fn_ping não encontrada. Execute supabase/ping.sql no SQL Editor."
+              exit 1
+            fi
+
+            sleep 20
+          done
+
+          echo "::error::O banco não respondeu em 3 tentativas. Verifique se o projeto já está pausado."
+          exit 1
